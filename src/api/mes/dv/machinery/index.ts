@@ -2,19 +2,19 @@ import request from '@/config/axios'
 
 // MES 设备台账 VO
 export interface DvMachineryVO {
-  id: number // 编号
-  code: string // 设备编码
-  name: string // 设备名称
-  brand: string // 品牌
-  specification: string // 规格型号
-  machineryTypeId: number // 设备类型编号
-  machineryTypeName: string // 设备类型名称
-  workshopId: number // 所属车间编号
-  workshopName: string // 所属车间名称
-  status: number // 设备状态
-  lastMaintenTime: Date // 最近保养时间
-  lastCheckTime: Date // 最近点检时间
-  remark: string // 备注
+  id: number
+  code: string
+  name: string
+  brand: string
+  specification: string
+  machineryTypeId: number
+  machineryTypeName: string
+  workshopId: number
+  workshopName: string
+  status: number
+  lastMaintenTime: Date
+  lastCheckTime: Date
+  remark: string
 }
 
 // MES 设备台账 API
@@ -52,5 +52,17 @@ export const DvMachineryApi = {
   // 下载设备导入模板
   importTemplate: async () => {
     return await request.download({ url: `/mes/dv/machinery/get-import-template` })
+  },
+
+  // 导入设备台账
+  importMachinery: async (file: File, updateSupport = false) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    const response = await request.upload({
+      url: `/mes/dv/machinery/import`,
+      data: formData,
+      params: { updateSupport }
+    })
+    return response.data
   }
 }

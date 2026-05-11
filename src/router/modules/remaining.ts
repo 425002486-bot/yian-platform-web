@@ -105,6 +105,42 @@ const remainingRouter: AppRouteRecordRaw[] = [
     ]
   },
   {
+    path: '/asset',
+    component: Layout,
+    name: 'AssetRouter',
+    meta: {
+      hidden: true
+    },
+    children: [
+      {
+        path: 'device/detail/:id/docs',
+        component: () => import('@/views/yian/asset/device/docs.vue'),
+        name: 'AssetDeviceDocs',
+        meta: {
+          noCache: true,
+          hidden: true,
+          canTo: true,
+          icon: 'ep:document',
+          title: '建档附件',
+          activeMenu: '/asset/device'
+        }
+      },
+      {
+        path: 'device/detail/:id/history',
+        component: () => import('@/views/yian/asset/device/history.vue'),
+        name: 'AssetDeviceHistory',
+        meta: {
+          noCache: true,
+          hidden: true,
+          canTo: true,
+          icon: 'ep:histogram',
+          title: '设备履历',
+          activeMenu: '/asset/device'
+        }
+      }
+    ]
+  },
+  {
     path: '/dict',
     component: Layout,
     name: 'dict',

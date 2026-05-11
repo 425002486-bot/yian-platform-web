@@ -5,7 +5,7 @@
         <el-select v-model="queryParams.status" placeholder="全部" clearable class="!w-140px">
           <el-option label="待审核" value="pending" />
           <el-option label="正常放行" value="approved" />
-          <el-option label="限飞放行" value="limited" />
+          <el-option label="限制放行" value="limited" />
           <el-option label="驳回" value="rejected" />
         </el-select>
       </el-form-item>
@@ -26,7 +26,7 @@
       </el-table-column>
       <el-table-column label="审核人" prop="reviewer" width="100" />
       <el-table-column label="操作" width="120" fixed="right">
-        <template #default="{ row }">
+        <template #default>
           <el-button link type="primary">审核详情</el-button>
         </template>
       </el-table-column>
@@ -36,15 +36,48 @@
 
 <script lang="ts" setup>
 import { ContentWrap } from '@/components/ContentWrap'
+
 defineOptions({ name: 'WorkorderRelease' })
 
 const queryParams = reactive({ status: '' })
 
-const releaseTagType = (s: string) => ({ pending: 'warning', approved: 'success', limited: 'primary', rejected: 'danger' }[s] || 'info')
+const releaseTagType = (status: string) =>
+  (
+    {
+      pending: 'warning',
+      approved: 'success',
+      limited: 'primary',
+      rejected: 'danger'
+    } as Record<string, string>
+  )[status] || 'info'
 
 const releaseList = ref([
-  { orderNo: 'WO-20260502-018', deviceNo: 'DJI-M350-0027', repairResult: '更换桨叶 + 飞控复位', inspectResult: '通过', releaseStatus: 'pending', releaseStatusLabel: '待审核', reviewer: '-' },
-  { orderNo: 'WO-20260426-012', deviceNo: 'DJI-M300-0015', repairResult: '更换电机', inspectResult: '通过', releaseStatus: 'approved', releaseStatusLabel: '正常放行', reviewer: '陈工' },
-  { orderNo: 'WO-20260325-008', deviceNo: 'DJI-M30T-0042', repairResult: '传感器校准', inspectResult: '通过', releaseStatus: 'limited', releaseStatusLabel: '限飞放行', reviewer: '陈工' }
+  {
+    orderNo: 'WO-20260502-018',
+    deviceNo: 'DJI-M350-0027',
+    repairResult: '更换桨叶 + 飞控复位',
+    inspectResult: '通过',
+    releaseStatus: 'pending',
+    releaseStatusLabel: '待审核',
+    reviewer: '-'
+  },
+  {
+    orderNo: 'WO-20260426-012',
+    deviceNo: 'DJI-M300-0015',
+    repairResult: '更换电机',
+    inspectResult: '通过',
+    releaseStatus: 'approved',
+    releaseStatusLabel: '正常放行',
+    reviewer: '陈工'
+  },
+  {
+    orderNo: 'WO-20260325-008',
+    deviceNo: 'DJI-M30T-0042',
+    repairResult: '传感器校准',
+    inspectResult: '通过',
+    releaseStatus: 'limited',
+    releaseStatusLabel: '限制放行',
+    reviewer: '陈工'
+  }
 ])
 </script>

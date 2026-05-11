@@ -1,109 +1,353 @@
 <template>
   <ContentWrap>
-    <!-- 搜索栏 -->
-    <el-form :model="queryParams" ref="queryFormRef" :inline="true" class="mb-16px">
-      <el-form-item label="设备编号/SN" prop="keyword">
-        <el-input v-model="queryParams.keyword" placeholder="搜索设备编号 / SN / 机型" clearable class="!w-240px" />
+    <el-alert
+      title="资产中心按最新 MVP 原型对齐：设备状态由规则判断，附件解析、电池健康和关联事项统一在台账中汇总展示。"
+      type="info"
+      :closable="false"
+      show-icon
+      class="mb-16px"
+    />
+
+    <el-row :gutter="16" class="mb-16px">
+      <el-col :xs="24" :sm="12" :lg="6" v-for="card in summaryCards" :key="card.label">
+        <el-card shadow="hover" class="summary-card">
+          <div class="summary-card__label">{{ card.label }}</div>
+          <div class="summary-card__value">{{ card.value }}</div>
+          <div class="summary-card__desc">{{ card.desc }}</div>
+        </el-card>
+      </el-col>
+    </el-row>
+
+    <el-form
+      ref="queryFormRef"
+      :model="queryParams"
+      :inline="true"
+      label-width="88px"
+      class="mb-16px"
+    >
+      <el-form-item label="设备编码" prop="code">
+        <el-input
+          v-model="queryParams.code"
+          placeholder="请输入设备编码"
+          clearable
+          class="!w-220px"
+          @keyup.enter="handleQuery"
+        />
       </el-form-item>
-      <el-form-item label="站点" prop="siteId">
-        <el-select v-model="queryParams.siteId" placeholder="全部站点" clearable class="!w-160px">
-          <el-option label="华东运营中心" :value="1" />
-          <el-option label="苏州工业园站" :value="2" />
-          <el-option label="嘉兴南湖站" :value="3" />
+      <el-form-item label="设备名称" prop="name">
+        <el-input
+          v-model="queryParams.name"
+          placeholder="请输入设备名称"
+          clearable
+          class="!w-220px"
+          @keyup.enter="handleQuery"
+        />
+      </el-form-item>
+      <el-form-item label="所属车间" prop="workshopId">
+        <el-select
+          v-model="queryParams.workshopId"
+          placeholder="请选择所属车间"
+          clearable
+          class="!w-220px"
+        >
+          <el-option
+            v-for="item in workshopList"
+            :key="item.id"
+            :label="item.name"
+            :value="item.id"
+          />
         </el-select>
       </el-form-item>
-      <el-form-item label="状态" prop="status">
-        <el-select v-model="queryParams.status" placeholder="全部状态" clearable class="!w-120px">
-          <el-option label="启用" value="active" />
-          <el-option label="待检" value="pending" />
-          <el-option label="维修中" value="repairing" />
-          <el-option label="停飞" value="grounded" />
+      <el-form-item label="设备状态" prop="status">
+        <el-select
+          v-model="queryParams.status"
+          placeholder="请选择设备状态"
+          clearable
+          class="!w-220px"
+        >
+          <el-option
+            v-for="dict in getIntDictOptions(DICT_TYPE.MES_DV_MACHINERY_STATUS)"
+            :key="dict.value"
+            :label="dict.label"
+            :value="dict.value"
+          />
         </el-select>
       </el-form-item>
       <el-form-item>
-        <el-button type="primary" @click="handleQuery"><Icon icon="ep:search" class="mr-4px" />查询</el-button>
-        <el-button @click="resetQuery"><Icon icon="ep:refresh" class="mr-4px" />重置</el-button>
+        <el-button type="primary" @click="handleQuery">
+          <Icon icon="ep:search" class="mr-4px" />
+          查询
+        </el-button>
+        <el-button @click="resetQuery">
+          <Icon icon="ep:refresh" class="mr-4px" />
+          重置
+        </el-button>
       </el-form-item>
     </el-form>
 
-    <!-- 操作栏 -->
-    <div class="mb-16px flex justify-between">
-      <div>
-        <el-button type="primary" @click="handleCreate"><Icon icon="ep:plus" class="mr-4px" />单个录入</el-button>
-        <el-button @click="handleImport"><Icon icon="ep:upload" class="mr-4px" />批量导入</el-button>
-      </div>
-      <el-button @click="handleExport"><Icon icon="ep:download" class="mr-4px" />导出</el-button>
+    <div class="mb-16px flex flex-wrap gap-12px">
+      <el-button type="primary" @click="handleCreate">
+        <Icon icon="ep:plus" class="mr-4px" />
+        单个录入
+      </el-button>
+      <el-button @click="handleImport">
+        <Icon icon="ep:upload" class="mr-4px" />
+        批量导入
+      </el-button>
+      <el-button @click="goBatteryCenter">
+        <Icon icon="ep:cellphone" class="mr-4px" />
+        电池资产
+      </el-button>
+      <el-button :loading="exportLoading" @click="handleExport">
+        <Icon icon="ep:download" class="mr-4px" />
+        导出
+      </el-button>
     </div>
 
-    <!-- 设备列表 -->
-    <el-table :data="deviceList" stripe>
-      <el-table-column label="设备编号" prop="deviceNo" width="160" />
-      <el-table-column label="序列号" prop="serialNo" width="180" />
-      <el-table-column label="机型" prop="model" width="140" />
-      <el-table-column label="站点" prop="siteName" width="140" />
-      <el-table-column label="责任人" prop="ownerName" width="100" />
-      <el-table-column label="状态" prop="status" width="160">
+    <el-table v-loading="loading" :data="assetRows" stripe>
+      <el-table-column label="资产编号 / SN" min-width="220">
         <template #default="{ row }">
-          <el-tooltip :content="row.statusReason" placement="top">
-            <el-tag :type="statusTagType(row.status)">{{ row.statusLabel }}</el-tag>
-          </el-tooltip>
+          <div class="font-600">{{ row.code || '-' }}</div>
+          <div class="text-secondary">SN：{{ row.assetProfile.serialNumber || '-' }}</div>
         </template>
       </el-table-column>
-      <el-table-column label="资料解析" prop="parseSummary" min-width="200" />
-      <el-table-column label="操作" width="180" fixed="right">
+      <el-table-column label="资产类型" min-width="150">
         <template #default="{ row }">
-          <el-button link type="primary" @click="handleDetail(row)">详情</el-button>
-          <el-button link type="primary" @click="handleHistory(row)">履历</el-button>
-          <el-button link type="primary" v-if="row.hasActiveWorkorder" @click="handleWorkorders(row)">关联工单</el-button>
+          <div>{{ row.assetProfile.assetCategory }}</div>
+          <div class="text-secondary">{{ row.machineryTypeName || '未配置机型' }}</div>
+        </template>
+      </el-table-column>
+      <el-table-column label="所属站点 / 责任人" min-width="180">
+        <template #default="{ row }">
+          <div>{{ row.assetProfile.siteName || '-' }}</div>
+          <div class="text-secondary">{{ row.assetProfile.ownerName || '待补录' }}</div>
+        </template>
+      </el-table-column>
+      <el-table-column label="当前状态" min-width="240">
+        <template #default="{ row }">
+          <dict-tag :type="DICT_TYPE.MES_DV_MACHINERY_STATUS" :value="row.status" />
+          <div class="mt-6px">{{ row.assetProfile.currentStage }}</div>
+          <div class="text-secondary">{{ row.assetProfile.statusReason }}</div>
+          <div class="text-secondary">依据：{{ row.assetProfile.statusSource }}</div>
+        </template>
+      </el-table-column>
+      <el-table-column label="资料解析摘要" min-width="220">
+        <template #default="{ row }">
+          <div>{{ row.assetProfile.parseSummary }}</div>
+          <div class="text-secondary">{{ row.assetProfile.parseSource }}</div>
+          <div class="text-secondary">更新时间：{{ row.assetProfile.parseUpdatedAt }}</div>
+        </template>
+      </el-table-column>
+      <el-table-column label="在途事项" min-width="220">
+        <template #default="{ row }">
+          <div>{{ row.assetProfile.workorderSummary }}</div>
+          <div class="text-secondary">
+            关联电池：{{ row.assetProfile.linkedBatteries.length || 0 }} 组
+          </div>
+          <div
+            v-if="row.assetProfile.missingItems.length"
+            class="text-warning mt-4px"
+          >
+            缺失：{{ row.assetProfile.missingItems.join('；') }}
+          </div>
+        </template>
+      </el-table-column>
+      <el-table-column label="最近维保" min-width="180">
+        <template #default="{ row }">
+          <div>保养：{{ formatDateSafe(row.lastMaintenTime) }}</div>
+          <div class="text-secondary">点检：{{ formatDateSafe(row.lastCheckTime) }}</div>
+        </template>
+      </el-table-column>
+      <el-table-column label="操作" width="220" fixed="right">
+        <template #default="{ row }">
+          <el-button link type="primary" @click="handleDetail(row.id)">设备详情</el-button>
+          <el-button link type="primary" @click="handleHistory(row.id)">设备履历</el-button>
+          <el-button link type="primary" @click="handleWorkorders(row.id)">关联工单</el-button>
         </template>
       </el-table-column>
     </el-table>
 
-    <el-pagination
-      class="mt-16px"
+    <Pagination
       :total="total"
-      v-model:current-page="queryParams.pageNo"
-      v-model:page-size="queryParams.pageSize"
-      :page-sizes="[20, 50, 100]"
-      layout="total, sizes, prev, pager, next"
+      v-model:page="queryParams.pageNo"
+      v-model:limit="queryParams.pageSize"
+      @pagination="getList"
     />
   </ContentWrap>
+
+  <MachineryForm ref="formRef" @success="getList" />
 </template>
 
 <script lang="ts" setup>
 import { ContentWrap } from '@/components/ContentWrap'
+import { DvMachineryApi, DvMachineryVO } from '@/api/mes/dv/machinery'
+import { MdWorkshopApi, MdWorkshopVO } from '@/api/mes/md/workstation/workshop'
+import { resolveAssetDeviceProfile } from '@/api/yian/asset'
+import { DICT_TYPE, getIntDictOptions } from '@/utils/dict'
+import { formatDate } from '@/utils/formatTime'
+import download from '@/utils/download'
+import MachineryForm from '@/views/mes/dv/machinery/MachineryForm.vue'
 
 defineOptions({ name: 'AssetDevice' })
 
-const queryParams = reactive({
-  keyword: '',
-  siteId: undefined,
-  status: undefined,
-  pageNo: 1,
-  pageSize: 20
-})
-
-const total = ref(0)
-
-// Mock 数据 - 后续替换为 API 调用
-const deviceList = ref([
-  { deviceNo: 'DJI-M350-0027', serialNo: '1ZNBJ8K00C00YK', model: 'M350 RTK', siteName: '华东运营中心', ownerName: '张工', status: 'grounded', statusLabel: '停飞', statusReason: '飞控异常，待放行审核', parseSummary: '适航证 有效 | 校准 临期', hasActiveWorkorder: true },
-  { deviceNo: 'DJI-M300-0015', serialNo: '1ZNBJ7H00B00XM', model: 'M300 RTK', siteName: '苏州工业园站', ownerName: '李工', status: 'repairing', statusLabel: '维修中', statusReason: '工单 WO-0502-012 待领料', parseSummary: '适航证 有效 | 校准 正常', hasActiveWorkorder: true },
-  { deviceNo: 'DJI-M30T-0042', serialNo: '1ZNBJ9M00D00ZP', model: 'M30T', siteName: '嘉兴南湖站', ownerName: '王工', status: 'active', statusLabel: '启用', statusReason: '正常运行', parseSummary: '适航证 有效 | 校准 正常', hasActiveWorkorder: false },
-  { deviceNo: 'DJI-M350-0033', serialNo: '1ZNBJ8K00C00YR', model: 'M350 RTK', siteName: '华东运营中心', ownerName: '赵工', status: 'pending', statusLabel: '待检', statusReason: '保养临期，7日内到期', parseSummary: '适航证 有效 | 校准 临期', hasActiveWorkorder: false }
-])
-
-const statusTagType = (status: string) => {
-  const map: Record<string, string> = { active: 'success', pending: 'warning', repairing: 'primary', grounded: 'danger' }
-  return map[status] || 'info'
+type AssetDeviceRow = DvMachineryVO & {
+  assetProfile: ReturnType<typeof resolveAssetDeviceProfile>
 }
 
-const handleQuery = () => { /* TODO */ }
-const resetQuery = () => { queryParams.keyword = ''; queryParams.siteId = undefined; queryParams.status = undefined }
-const handleCreate = () => { /* TODO: router push */ }
-const handleImport = () => { /* TODO: router push */ }
-const handleExport = () => { /* TODO */ }
-const handleDetail = (row: any) => { /* TODO: router push */ }
-const handleHistory = (row: any) => { /* TODO: router push */ }
-const handleWorkorders = (row: any) => { /* TODO: router push */ }
+const message = useMessage()
+const router = useRouter()
+
+const loading = ref(false)
+const exportLoading = ref(false)
+const deviceList = ref<DvMachineryVO[]>([])
+const workshopList = ref<MdWorkshopVO[]>([])
+const total = ref(0)
+const queryFormRef = ref()
+const formRef = ref()
+const queryParams = reactive({
+  pageNo: 1,
+  pageSize: 10,
+  code: undefined as string | undefined,
+  name: undefined as string | undefined,
+  workshopId: undefined as number | undefined,
+  status: undefined as number | undefined
+})
+
+const assetRows = computed<AssetDeviceRow[]>(() =>
+  deviceList.value.map((item) => ({
+    ...item,
+    assetProfile: resolveAssetDeviceProfile(item)
+  }))
+)
+
+const summaryCards = computed(() => {
+  const rows = assetRows.value
+  return [
+    {
+      label: '当前页设备数',
+      value: `${rows.length}`,
+      desc: total.value ? `总计 ${total.value} 台设备` : '按原型先打通资产闭环'
+    },
+    {
+      label: '待放行 / 待观察',
+      value: `${rows.filter((item) => item.assetProfile.currentStage !== '主档在册').length}`,
+      desc: '含待放行、待检观察等规则状态'
+    },
+    {
+      label: '资料待补充',
+      value: `${rows.filter((item) => item.assetProfile.missingItems.length > 0).length}`,
+      desc: '附件缺失会在详情和附件页继续提示'
+    },
+    {
+      label: '预警电池绑定',
+      value: `${rows.filter((item) => item.assetProfile.linkedBatteries.length > 0).length}`,
+      desc: '支持联动电池资产查看 SOH 与检测来源'
+    }
+  ]
+})
+
+const getList = async () => {
+  loading.value = true
+  try {
+    const data = await DvMachineryApi.getMachineryPage(queryParams)
+    deviceList.value = data.list
+    total.value = data.total
+  } finally {
+    loading.value = false
+  }
+}
+
+const handleQuery = () => {
+  queryParams.pageNo = 1
+  getList()
+}
+
+const resetQuery = () => {
+  queryFormRef.value?.resetFields()
+  handleQuery()
+}
+
+const handleCreate = () => {
+  formRef.value?.open('create')
+}
+
+const handleImport = () => {
+  router.push('/asset/import')
+}
+
+const goBatteryCenter = () => {
+  router.push('/asset/battery')
+}
+
+const handleExport = async () => {
+  try {
+    await message.exportConfirm()
+    exportLoading.value = true
+    const data = await DvMachineryApi.exportMachinery(queryParams)
+    download.excel(data, '设备台账.xls')
+  } finally {
+    exportLoading.value = false
+  }
+}
+
+const handleDetail = (id: number) => {
+  router.push(`/asset/device/detail/${id}`)
+}
+
+const handleHistory = (id: number) => {
+  router.push(`/asset/device/detail/${id}/history`)
+}
+
+const handleWorkorders = (id: number) => {
+  router.push({
+    path: `/asset/device/detail/${id}`,
+    query: { tab: 'workorders' }
+  })
+}
+
+const formatDateSafe = (value?: string | number | Date) => {
+  return value ? formatDate(value as Date) : '-'
+}
+
+onMounted(async () => {
+  await Promise.all([
+    getList(),
+    MdWorkshopApi.getWorkshopSimpleList().then((data) => {
+      workshopList.value = data
+    })
+  ])
+})
 </script>
+
+<style lang="scss" scoped>
+.summary-card {
+  min-height: 120px;
+}
+
+.summary-card__label {
+  color: var(--el-text-color-secondary);
+  font-size: 13px;
+}
+
+.summary-card__value {
+  margin-top: 12px;
+  font-size: 30px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.summary-card__desc {
+  margin-top: 12px;
+  color: var(--el-text-color-secondary);
+  line-height: 1.5;
+}
+
+.text-secondary {
+  color: var(--el-text-color-secondary);
+  line-height: 1.5;
+}
+
+.text-warning {
+  color: var(--el-color-warning);
+}
+</style>
