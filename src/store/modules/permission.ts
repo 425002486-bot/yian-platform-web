@@ -7,6 +7,19 @@ import { CACHE_KEY, useCache } from '@/hooks/web/useCache'
 
 const { wsCache } = useCache()
 
+const ALLOWED_TOP_LEVEL_MENU_PATHS = new Set([
+  '/dashboard',
+  '/asset',
+  '/workorder',
+  '/inventory',
+  '/audit',
+  '/config'
+])
+
+const filterBusinessMenus = (menus: AppCustomRouteRecordRaw[]) => {
+  return menus.filter((menu) => ALLOWED_TOP_LEVEL_MENU_PATHS.has(menu.path))
+}
+
 export interface PermissionState {
   routers: AppRouteRecordRaw[]
   addRouters: AppRouteRecordRaw[]
@@ -37,7 +50,7 @@ export const usePermissionStore = defineStore('permission', {
         let res: AppCustomRouteRecordRaw[] = []
         const roleRouters = wsCache.get(CACHE_KEY.ROLE_ROUTERS)
         if (roleRouters) {
-          res = roleRouters as AppCustomRouteRecordRaw[]
+          res = filterBusinessMenus(roleRouters as AppCustomRouteRecordRaw[])
         }
         const routerMap: AppRouteRecordRaw[] = generateRoute(res)
         // 动态路由，404一定要放到最后面

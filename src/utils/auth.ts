@@ -64,7 +64,7 @@ export const removeLoginForm = () => {
 // ========== 租户相关 ==========
 
 export const getTenantId = () => {
-  return wsCache.get(CACHE_KEY.TenantId)
+  return wsCache.get(CACHE_KEY.TenantId) ?? Number(import.meta.env.VITE_APP_DEFAULT_TENANT_ID || 0)
 }
 
 export const setTenantId = (tenantId: number) => {

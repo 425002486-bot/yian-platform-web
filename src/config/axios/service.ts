@@ -16,6 +16,7 @@ import errorCode from './errorCode'
 import { resetRouter } from '@/router'
 import { deleteUserCache } from '@/hooks/web/useCache'
 import { ApiEncrypt } from '@/utils/encrypt'
+import { isLocalMesDemoEnabled } from '@/api/mes/localDemo'
 
 const tenantEnable = import.meta.env.VITE_APP_TENANT_ENABLE
 const { result_code, base_url, request_timeout } = config
@@ -226,6 +227,9 @@ service.interceptors.response.use(
     console.log('err' + error) // for debug
     let { message } = error
     const { t } = useI18n()
+    if (isLocalMesDemoEnabled() && message === 'Network Error') {
+      return Promise.reject(error)
+    }
     if (message === 'Network Error') {
       message = t('sys.api.errorMessage')
     } else if (message.includes('timeout')) {

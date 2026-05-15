@@ -1,5 +1,6 @@
 import request from '@/config/axios'
 import qs from 'qs'
+import { isLocalMesDemoEnabled } from '@/api/mes/localDemo'
 
 export interface NotifyMessageVO {
   id: number
@@ -45,5 +46,12 @@ export const getUnreadNotifyMessageList = async () => {
 
 // 获得当前用户的未读站内信数量
 export const getUnreadNotifyMessageCount = async () => {
-  return await request.get({ url: '/system/notify-message/get-unread-count' })
+  try {
+    return await request.get({ url: '/system/notify-message/get-unread-count' })
+  } catch (error) {
+    if (isLocalMesDemoEnabled()) {
+      return 0
+    }
+    throw error
+  }
 }

@@ -9,8 +9,7 @@
       >
         <!-- 左上角的 logo + 系统标题 -->
         <div class="relative flex items-center text-white">
-          <img alt="" class="mr-10px h-48px w-48px" src="@/assets/imgs/logo.png" />
-          <span class="text-20px font-bold">{{ underlineToHump(appStore.getTitle) }}</span>
+          <img :src="logoFull" alt="翼安智链" class="h-52px w-auto max-w-280px object-contain" />
         </div>
         <!-- 左边的背景图 + 欢迎语 -->
         <div class="h-[calc(100%-60px)] flex items-center justify-center">
@@ -35,8 +34,7 @@
           class="flex items-center justify-between text-white at-2xl:justify-end at-xl:justify-end"
         >
           <div class="flex items-center at-2xl:hidden at-xl:hidden">
-            <img alt="" class="mr-10px h-48px w-48px" src="@/assets/imgs/logo.png" />
-            <span class="text-20px font-bold">{{ underlineToHump(appStore.getTitle) }}</span>
+            <img :src="logoFull" alt="翼安智链" class="h-52px w-auto max-w-280px object-contain" />
           </div>
           <div class="flex items-center justify-end space-x-10px h-48px">
             <ThemeSwitch />
@@ -150,12 +148,11 @@
 </template>
 
 <script lang="ts" setup>
-import { underlineToHump } from '@/utils'
+import logoFull from '@/assets/imgs/logo-full.png'
 
 import { ElLoading } from 'element-plus'
 
 import { useDesign } from '@/hooks/web/useDesign'
-import { useAppStore } from '@/store/modules/app'
 import { useIcon } from '@/hooks/web/useIcon'
 import { usePermissionStore } from '@/store/modules/permission'
 
@@ -172,7 +169,6 @@ defineOptions({ name: 'SocialLogin' })
 const { t } = useI18n()
 const route = useRoute()
 
-const appStore = useAppStore()
 const { getPrefixCls } = useDesign()
 const prefixCls = getPrefixCls('login')
 const iconHouse = useIcon({ icon: 'ep:house' })
@@ -313,7 +309,7 @@ const handleLogin = async (params) => {
     }
   } finally {
     loginLoading.value = false
-    loading.value.close()
+    loading.value?.close?.()
   }
 }
 

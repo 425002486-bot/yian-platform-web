@@ -1,12 +1,18 @@
 import request from '@/config/axios'
+import { LocalDemoMesApi, isLocalMesDemoEnabled } from '@/api/mes/localDemo'
 
-// MES 编码生成 API
 export const AutoCodeRecordApi = {
-  // 生成编码
   generateAutoCode: async (ruleCode: string, inputChar?: string) => {
-    return await request.post({
-      url: `/mes/md/auto-code-record/generate`,
-      data: { ruleCode, inputChar }
-    })
+    try {
+      return await request.post({
+        url: '/mes/md/auto-code-record/generate',
+        data: { ruleCode, inputChar }
+      })
+    } catch (error) {
+      if (isLocalMesDemoEnabled()) {
+        return LocalDemoMesApi.generateAutoCode(ruleCode, inputChar)
+      }
+      throw error
+    }
   }
 }

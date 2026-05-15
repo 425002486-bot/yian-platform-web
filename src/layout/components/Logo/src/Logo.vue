@@ -2,6 +2,8 @@
 import { computed, onMounted, ref, unref, watch } from 'vue'
 import { useAppStore } from '@/store/modules/app'
 import { useDesign } from '@/hooks/web/useDesign'
+import logoMark from '@/assets/imgs/logo.png'
+import logoFull from '@/assets/imgs/logo-full.png'
 
 defineOptions({ name: 'Logo' })
 
@@ -12,8 +14,6 @@ const prefixCls = getPrefixCls('logo')
 const appStore = useAppStore()
 
 const show = ref(true)
-
-const title = computed(() => appStore.getTitle)
 
 const layout = computed(() => appStore.getLayout)
 
@@ -67,22 +67,14 @@ watch(
       to="/"
     >
       <img
-        class="h-[calc(var(--logo-height)-10px)] w-[calc(var(--logo-height)-10px)]"
-        src="@/assets/imgs/logo.png"
+        :class="
+          show
+            ? 'h-[calc(var(--logo-height)-12px)] w-auto max-w-[168px] object-contain'
+            : 'h-[calc(var(--logo-height)-10px)] w-[calc(var(--logo-height)-10px)] object-contain'
+        "
+        :src="show ? logoFull : logoMark"
+        alt="翼安智链"
       />
-      <div
-        v-if="show"
-        :class="[
-          'ml-10px text-16px font-700',
-          {
-            'text-[var(--logo-title-text-color)]': layout === 'classic',
-            'text-[var(--top-header-text-color)]':
-              layout === 'topLeft' || layout === 'top' || layout === 'cutMenu'
-          }
-        ]"
-      >
-        {{ title }}
-      </div>
     </router-link>
   </div>
 </template>

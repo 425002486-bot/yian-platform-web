@@ -1,6 +1,6 @@
 import request from '@/config/axios'
+import { LocalDemoMesApi, isLocalMesDemoEnabled } from '@/api/mes/localDemo'
 
-// MES 设备台账 VO
 export interface DvMachineryVO {
   id: number
   code: string
@@ -12,54 +12,72 @@ export interface DvMachineryVO {
   workshopId: number
   workshopName: string
   status: number
-  lastMaintenTime: Date
-  lastCheckTime: Date
+  lastMaintenTime: Date | string
+  lastCheckTime: Date | string
+  createTime?: string | Date
   remark: string
 }
 
-// MES 设备台账 API
+const withLocalMachineryFallback = async <T>(fallback: () => T, remote: () => Promise<T>) => {
+  try {
+    return await remote()
+  } catch (error) {
+    if (isLocalMesDemoEnabled()) {
+      return fallback()
+    }
+    throw error
+  }
+}
+
 export const DvMachineryApi = {
-  // 查询设备台账分页
   getMachineryPage: async (params: any) => {
-    return await request.get({ url: `/mes/dv/machinery/page`, params })
+    return await withLocalMachineryFallback(
+      () => LocalDemoMesApi.getMachineryPage(params),
+      () => request.get({ url: '/mes/dv/machinery/page', params })
+    )
   },
 
-  // 查询设备台账详情
   getMachinery: async (id: number) => {
-    return await request.get({ url: `/mes/dv/machinery/get?id=` + id })
+    return await withLocalMachineryFallback(
+      () => LocalDemoMesApi.getMachinery(id),
+      () => request.get({ url: '/mes/dv/machinery/get?id=' + id })
+    )
   },
 
-  // 新增设备台账
   createMachinery: async (data: DvMachineryVO) => {
-    return await request.post({ url: `/mes/dv/machinery/create`, data })
+    return await withLocalMachineryFallback(
+      () => LocalDemoMesApi.createMachinery(data),
+      () => request.post({ url: '/mes/dv/machinery/create', data })
+    )
   },
 
-  // 修改设备台账
   updateMachinery: async (data: DvMachineryVO) => {
-    return await request.put({ url: `/mes/dv/machinery/update`, data })
+    return await withLocalMachineryFallback(
+      () => LocalDemoMesApi.updateMachinery(data),
+      () => request.put({ url: '/mes/dv/machinery/update', data })
+    )
   },
 
-  // 删除设备台账
   deleteMachinery: async (id: number) => {
-    return await request.delete({ url: `/mes/dv/machinery/delete?id=` + id })
+    return await withLocalMachineryFallback(
+      () => LocalDemoMesApi.deleteMachinery(id),
+      () => request.delete({ url: '/mes/dv/machinery/delete?id=' + id })
+    )
   },
 
-  // 导出设备台账 Excel
   exportMachinery: async (params: any) => {
-    return await request.download({ url: `/mes/dv/machinery/export-excel`, params })
+    return await request.download({ url: '/mes/dv/machinery/export-excel', params })
   },
 
-  // 下载设备导入模板
   importTemplate: async () => {
-    return await request.download({ url: `/mes/dv/machinery/get-import-template` })
+    return await request.download({ url: '/mes/dv/machinery/get-import-template' })
   },
 
-  // 导入设备台账
   importMachinery: async (file: File, updateSupport = false) => {
     const formData = new FormData()
     formData.append('file', file)
     const response = await request.upload({
-      url: `/mes/dv/machinery/import`,
+      url: '/mes/dv/machinery/import',
       data: formData,
       params: { updateSupport }
     })

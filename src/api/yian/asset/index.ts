@@ -1,4 +1,5 @@
 import type { DvMachineryVO } from '@/api/mes/dv/machinery'
+import type { AssetBatteryVO as BackendAssetBatteryVO } from '@/api/yian/asset/backend'
 
 export type AssetRiskTone = 'success' | 'warning' | 'danger' | 'info'
 
@@ -39,6 +40,56 @@ export interface AssetBatteryVO {
   healthLabel: string
   sourceEvidence: string
   recommendation: string
+}
+
+export interface AssetBatteryInspectionVO {
+  id: string
+  inspectedAt: string
+  inspector: string
+  source: string
+  conclusion: string
+  summary: string
+  evidence: string
+}
+
+export interface AssetBatteryAttachmentVO {
+  id: string
+  fileName: string
+  category: string
+  summary: string
+  uploadedAt: string
+  uploadedBy: string
+}
+
+export interface AssetBatteryCorrectionVO {
+  id: string
+  detectedAt: string
+  summary: string
+  detail: string
+  actionHint: string
+  tone: AssetRiskTone
+}
+
+export interface AssetBatteryProfileVO {
+  healthScore?: number
+  healthScoreLabel: string
+  healthScoreTone: AssetRiskTone
+  currentOwnerName: string
+  standardDeviceCode?: string
+  standardDeviceName?: string
+  actualMountedDeviceCode?: string
+  actualMountedDeviceName?: string
+  inspectionStatus: string
+  inspectionDueText: string
+  scoreBreakdown: Array<{
+    label: string
+    value: string
+    tone?: AssetRiskTone
+  }>
+  inspectionRecords: AssetBatteryInspectionVO[]
+  attachments: AssetBatteryAttachmentVO[]
+  correctionHints: AssetBatteryCorrectionVO[]
+  remarks: string[]
 }
 
 export interface AssetDeviceProfileVO {
@@ -138,6 +189,213 @@ const batteryAssets: AssetBatteryVO[] = [
     recommendation: '禁止放行，需完成更换后再绑定主机'
   }
 ]
+
+const batteryProfiles: Record<string, AssetBatteryProfileVO> = {
+  'YA-BT-00891': {
+    healthScore: 85,
+    healthScoreLabel: '85 分',
+    healthScoreTone: 'warning',
+    currentOwnerName: '周启明',
+    standardDeviceCode: 'UAV-MVP-001',
+    standardDeviceName: 'Inspection UAV 01',
+    actualMountedDeviceCode: 'UAV-MVP-001',
+    actualMountedDeviceName: 'Inspection UAV 01',
+    inspectionStatus: '待巡检',
+    inspectionDueText: '距上次巡检 13 天，已超过 7 天例行巡检要求',
+    scoreBreakdown: [
+      { label: 'SOH', value: '87%，基础健康正常' },
+      { label: '循环次数', value: '186 次，进入重点观察区间', tone: 'warning' },
+      { label: '压差与外观', value: '压差 0.02V，外观巡检无异常' },
+      { label: '数据完整性', value: '日志与检测报告齐全，可解释来源明确' }
+    ],
+    inspectionRecords: [
+      {
+        id: 'inspection-891-1',
+        inspectedAt: '2026-05-10 08:40',
+        inspector: '周启明',
+        source: '检测报告',
+        conclusion: '继续观察',
+        summary: '循环次数偏高但压差稳定，允许短航时任务。',
+        evidence: '附件：TB65_20260510_report.pdf'
+      },
+      {
+        id: 'inspection-891-2',
+        inspectedAt: '2026-04-28 09:15',
+        inspector: '华东运维中心',
+        source: '人工巡检',
+        conclusion: '通过',
+        summary: '外观、触点、鼓包检查通过。',
+        evidence: '附件：battery_check_20260428.jpg'
+      }
+    ],
+    attachments: [
+      {
+        id: 'attachment-891-1',
+        fileName: 'flight-log-20260512.csv',
+        category: '飞行日志',
+        summary: '识别到 1 次跨主机挂载记录，需人工确认是否临时调拨。',
+        uploadedAt: '2026-05-12 18:22',
+        uploadedBy: '系统解析'
+      },
+      {
+        id: 'attachment-891-2',
+        fileName: 'TB65_20260510_report.pdf',
+        category: '检测报告',
+        summary: 'SOH、循环次数与压差字段已成功解析。',
+        uploadedAt: '2026-05-10 08:40',
+        uploadedBy: '周启明'
+      }
+    ],
+    correctionHints: [
+      {
+        id: 'correction-891-1',
+        detectedAt: '2026-05-12 18:22',
+        summary: '日志识别到非备案挂载',
+        detail: '系统在飞行日志中识别到该电池曾挂载至 UAV-MVP-003，但主档备案仍为 UAV-MVP-001。',
+        actionHint: '系统仅提示差异，请人工核实后进入主档编辑页维护标配关系。',
+        tone: 'warning'
+      }
+    ],
+    remarks: ['建议优先安排本周复检，不建议直接执行长航时任务。']
+  },
+  'YA-BT-00912': {
+    healthScore: 92,
+    healthScoreLabel: '92 分',
+    healthScoreTone: 'success',
+    currentOwnerName: '周启明',
+    standardDeviceCode: 'UAV-MVP-001',
+    standardDeviceName: 'Inspection UAV 01',
+    actualMountedDeviceCode: 'UAV-MVP-001',
+    actualMountedDeviceName: 'Inspection UAV 01',
+    inspectionStatus: '状态正常',
+    inspectionDueText: '最近一次 BMS 回传完整，暂未触发额外巡检提醒',
+    scoreBreakdown: [
+      { label: 'SOH', value: '93%，状态良好' },
+      { label: '循环次数', value: '72 次，处于安全区间' },
+      { label: '来源可信度', value: 'BMS 自动回传，可追溯性高' }
+    ],
+    inspectionRecords: [
+      {
+        id: 'inspection-912-1',
+        inspectedAt: '2026-05-08 14:20',
+        inspector: '系统同步',
+        source: 'BMS',
+        conclusion: '通过',
+        summary: 'SOH 与循环次数正常，可执行常规任务。',
+        evidence: 'BMS 自动同步记录'
+      }
+    ],
+    attachments: [
+      {
+        id: 'attachment-912-1',
+        fileName: 'bms-sync-20260508.json',
+        category: 'BMS 数据',
+        summary: '同步了 SOH、循环次数和最近一次检测时间。',
+        uploadedAt: '2026-05-08 14:20',
+        uploadedBy: '系统同步'
+      }
+    ],
+    correctionHints: [],
+    remarks: ['当前无纠偏提示，可作为常规标配电池继续使用。']
+  },
+  'YA-BT-01003': {
+    healthScore: 79,
+    healthScoreLabel: '79 分',
+    healthScoreTone: 'warning',
+    currentOwnerName: '罗家豪',
+    standardDeviceCode: 'UAV-MVP-002',
+    standardDeviceName: 'Inspection UAV 02',
+    actualMountedDeviceCode: 'UAV-MVP-002',
+    actualMountedDeviceName: 'Inspection UAV 02',
+    inspectionStatus: '观察中',
+    inspectionDueText: '已命中寿命预警规则，建议 48 小时内完成复检',
+    scoreBreakdown: [
+      { label: 'SOH', value: '78%，接近预警阈值', tone: 'warning' },
+      { label: '循环次数', value: '244 次，持续累积偏高', tone: 'warning' },
+      { label: '外观巡检', value: '最近一次记录无鼓包，但建议复检插头触点' }
+    ],
+    inspectionRecords: [
+      {
+        id: 'inspection-1003-1',
+        inspectedAt: '2026-05-09 17:30',
+        inspector: '苏州工业园站',
+        source: '检测工装',
+        conclusion: '观察中',
+        summary: '检测结果提示寿命预警，建议限制长航时任务。',
+        evidence: '附件：TB65_20260509_fixture.pdf'
+      }
+    ],
+    attachments: [
+      {
+        id: 'attachment-1003-1',
+        fileName: 'TB65_20260509_fixture.pdf',
+        category: '检测报告',
+        summary: '已解析出 SOH 78%、循环 244 次。',
+        uploadedAt: '2026-05-09 17:30',
+        uploadedBy: '苏州工业园站'
+      },
+      {
+        id: 'attachment-1003-2',
+        fileName: 'flight-log-20260511.csv',
+        category: '飞行日志',
+        summary: '日志识别到挂载主机与备案一致。',
+        uploadedAt: '2026-05-11 12:05',
+        uploadedBy: '系统解析'
+      }
+    ],
+    correctionHints: [],
+    remarks: ['建议仅执行白天短航时任务，并在下一次放行前复检。']
+  },
+  'YA-BT-01007': {
+    healthScore: 58,
+    healthScoreLabel: '58 分',
+    healthScoreTone: 'danger',
+    currentOwnerName: '罗家豪',
+    standardDeviceCode: 'UAV-MVP-002',
+    standardDeviceName: 'Inspection UAV 02',
+    actualMountedDeviceCode: 'UAV-MVP-002',
+    actualMountedDeviceName: 'Inspection UAV 02',
+    inspectionStatus: '停飞禁用',
+    inspectionDueText: '已命中低寿命强规则，需完成更换后再恢复挂载',
+    scoreBreakdown: [
+      { label: 'SOH', value: '61%，接近禁飞阈值', tone: 'danger' },
+      { label: '循环次数', value: '398 次，达到高风险区间', tone: 'danger' },
+      { label: '检测结论', value: '人工导入检测报告已命中停飞规则', tone: 'danger' }
+    ],
+    inspectionRecords: [
+      {
+        id: 'inspection-1007-1',
+        inspectedAt: '2026-05-06 11:10',
+        inspector: '罗家豪',
+        source: '人工导入',
+        conclusion: '禁止放行',
+        summary: '寿命不足，必须完成更换后再绑定主机。',
+        evidence: '附件：TB65_20260506_manual.pdf'
+      }
+    ],
+    attachments: [
+      {
+        id: 'attachment-1007-1',
+        fileName: 'TB65_20260506_manual.pdf',
+        category: '检测报告',
+        summary: '人工导入检测结果，命中低寿命强规则。',
+        uploadedAt: '2026-05-06 11:10',
+        uploadedBy: '罗家豪'
+      }
+    ],
+    correctionHints: [
+      {
+        id: 'correction-1007-1',
+        detectedAt: '2026-05-06 11:20',
+        summary: '主机仍绑定停飞电池',
+        detail: '日志与主档均显示该电池仍处于 UAV-MVP-002 的标配关系中，需人工确认是否已更换。',
+        actionHint: '如已更换，请在主档编辑页解绑旧电池并维护新电池关系。',
+        tone: 'danger'
+      }
+    ],
+    remarks: ['该电池不应继续参与放行，建议尽快完成更换和主档调整。']
+  }
+}
 
 const deviceProfiles: Record<string, AssetDeviceProfileVO> = {
   'UAV-MVP-001': {
@@ -331,7 +589,7 @@ const deviceProfiles: Record<string, AssetDeviceProfileVO> = {
 
 const buildDefaultProfile = (device?: Partial<DvMachineryVO> | null): AssetDeviceProfileVO => ({
   assetCategory: '单台主机',
-  siteName: device?.workshopName || '-',
+  siteName: '待补录',
   serialNumber: `${device?.code || 'UNKNOWN'}-SN`,
   ownerName: '待补录',
   currentStage: '主档在册',
@@ -354,6 +612,12 @@ const buildDefaultProfile = (device?: Partial<DvMachineryVO> | null): AssetDevic
 
 const cloneDocuments = (documents: AssetDocumentVO[]) => documents.map((item) => ({ ...item }))
 const cloneHistory = (history: AssetHistoryEventVO[]) => history.map((item) => ({ ...item }))
+const cloneBatteryInspection = (records: AssetBatteryInspectionVO[]) =>
+  records.map((item) => ({ ...item }))
+const cloneBatteryAttachments = (attachments: AssetBatteryAttachmentVO[]) =>
+  attachments.map((item) => ({ ...item }))
+const cloneBatteryCorrections = (corrections: AssetBatteryCorrectionVO[]) =>
+  corrections.map((item) => ({ ...item }))
 
 export const resolveAssetDeviceProfile = (
   device?: Partial<DvMachineryVO> | null
@@ -374,3 +638,59 @@ export const listAssetBattery = (): AssetBatteryVO[] => batteryAssets.map((item)
 
 export const listLinkedBatteries = (deviceCode?: string) =>
   listAssetBattery().filter((item) => item.linkedDeviceCode === deviceCode)
+
+type AssetBatteryLike = Partial<BackendAssetBatteryVO> &
+  Partial<Omit<AssetBatteryVO, 'id'>> & {
+    batteryCode?: string
+    siteName?: string
+  }
+
+const buildDefaultBatteryProfile = (battery?: AssetBatteryLike | null): AssetBatteryProfileVO => {
+  const healthScore = typeof battery?.soh === 'number' ? battery.soh : undefined
+  const healthTone: AssetRiskTone =
+    battery?.healthStatus === 'danger'
+      ? 'danger'
+      : battery?.healthStatus === 'warning'
+        ? 'warning'
+        : 'success'
+
+  return {
+    healthScore,
+    healthScoreLabel: typeof healthScore === 'number' ? `${healthScore} 分` : 'N/A',
+    healthScoreTone: healthTone,
+    currentOwnerName: '待补录',
+    standardDeviceCode: battery?.linkedDeviceCode,
+    standardDeviceName: battery?.linkedDeviceName,
+    actualMountedDeviceCode: battery?.linkedDeviceCode,
+    actualMountedDeviceName: battery?.linkedDeviceName,
+    inspectionStatus: battery?.healthLabel || '待补录',
+    inspectionDueText: '当前仅有基础电池台账信息，待补充巡检记录与日志附件。',
+    scoreBreakdown: [
+      {
+        label: '健康分口径',
+        value: '当前按基础 SOH 映射展示，待补充巡检与日志后更新。'
+      }
+    ],
+    inspectionRecords: [],
+    attachments: [],
+    correctionHints: [],
+    remarks: ['当前为基础电池档案，请补录巡检记录与日志附件。']
+  }
+}
+
+export const resolveAssetBatteryProfile = (
+  battery?: AssetBatteryLike | null
+): AssetBatteryProfileVO => {
+  const code = battery?.batteryCode || ''
+  const profile = batteryProfiles[code]
+  if (!profile) {
+    return buildDefaultBatteryProfile(battery)
+  }
+  return {
+    ...profile,
+    inspectionRecords: cloneBatteryInspection(profile.inspectionRecords),
+    attachments: cloneBatteryAttachments(profile.attachments),
+    correctionHints: cloneBatteryCorrections(profile.correctionHints),
+    remarks: [...profile.remarks]
+  }
+}

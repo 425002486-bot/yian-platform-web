@@ -1,4 +1,5 @@
 import request from '@/config/axios'
+import { isLocalMesDemoEnabled } from '@/api/mes/localDemo'
 
 export interface TenantVO {
   id: number
@@ -44,7 +45,17 @@ export const getTenant = (id: number) => {
 
 // 获取租户精简信息列表
 export const getTenantList = () => {
-  return request.get({ url: '/system/tenant/simple-list' })
+  return request.get({ url: '/system/tenant/simple-list' }).catch((error) => {
+    if (isLocalMesDemoEnabled()) {
+      return [
+        {
+          id: 1,
+          name: import.meta.env.VITE_APP_DEFAULT_LOGIN_TENANT || '翼安智链'
+        }
+      ]
+    }
+    throw error
+  })
 }
 
 // 新增租户

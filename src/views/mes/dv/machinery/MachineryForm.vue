@@ -1,6 +1,5 @@
-<!-- MES 设备台账表单 -->
 <template>
-  <Dialog :title="dialogTitle" v-model="dialogVisible" width="960px">
+  <Dialog :title="dialogTitle" v-model="dialogVisible" width="1080px">
     <el-form
       ref="formRef"
       :model="formData"
@@ -9,16 +8,19 @@
       v-loading="formLoading"
       :disabled="isDetail"
     >
-      <el-row>
+      <el-row :gutter="16">
         <el-col :span="8">
-          <el-form-item label="设备编码" prop="code">
-            <el-input v-model="formData.code" placeholder="请输入设备编码">
-              <template #append>
-                <el-button @click="generateCode" :disabled="formType !== 'create'">
-                  生成
-                </el-button>
+          <el-form-item label="设备编号" prop="code">
+            <el-input v-model="formData.code" placeholder="请输入设备编号" :disabled="formType !== 'create'">
+              <template v-if="formType === 'create'" #append>
+                <el-button @click="generateCode">生成</el-button>
               </template>
             </el-input>
+          </el-form-item>
+        </el-col>
+        <el-col :span="8">
+          <el-form-item label="序列号" prop="serialNumber">
+            <el-input v-model="formData.serialNumber" placeholder="请输入设备序列号 SN" />
           </el-form-item>
         </el-col>
         <el-col :span="8">
@@ -26,44 +28,84 @@
             <el-input v-model="formData.name" placeholder="请输入设备名称" />
           </el-form-item>
         </el-col>
-        <el-col :span="8">
-          <el-form-item label="品牌" prop="brand">
-            <el-input v-model="formData.brand" placeholder="请输入品牌" />
-          </el-form-item>
-        </el-col>
       </el-row>
-      <el-row>
+
+      <el-row :gutter="16">
         <el-col :span="8">
           <el-form-item label="设备类型" prop="machineryTypeId">
             <DvMachineryTypeSelect v-model="formData.machineryTypeId" />
           </el-form-item>
         </el-col>
         <el-col :span="8">
-          <el-form-item label="所属车间" prop="workshopId">
-            <MdWorkshopSelect v-model="formData.workshopId" placeholder="请选择所属车间" />
-          </el-form-item>
-        </el-col>
-        <el-col :span="8">
-          <el-form-item label="设备状态" prop="status">
-            <el-select v-model="formData.status" placeholder="请选择状态" class="!w-1/1">
+          <el-form-item label="所属站点" prop="workshopId">
+            <el-select v-model="formData.workshopId" placeholder="请选择所属站点" class="!w-1/1">
               <el-option
-                v-for="dict in getIntDictOptions(DICT_TYPE.MES_DV_MACHINERY_STATUS)"
-                :key="dict.value"
-                :label="dict.label"
-                :value="dict.value"
+                v-for="item in workshopOptions"
+                :key="item.id"
+                :label="item.name"
+                :value="item.id"
               />
             </el-select>
           </el-form-item>
         </el-col>
+        <el-col :span="8">
+          <el-form-item label="责任人" prop="ownerName">
+            <el-input v-model="formData.ownerName" placeholder="请输入责任人" />
+          </el-form-item>
+        </el-col>
       </el-row>
-      <el-row>
+
+      <el-row :gutter="16">
+        <el-col :span="8">
+          <el-form-item label="启用状态" prop="enableStatus">
+            <el-select v-model="formData.enableStatus" placeholder="请选择启用状态" class="!w-1/1">
+              <el-option
+                v-for="item in ASSET_DEVICE_ENABLE_STATUS_OPTIONS"
+                :key="item.value"
+                :label="item.label"
+                :value="item.value"
+              />
+            </el-select>
+          </el-form-item>
+        </el-col>
+        <el-col :span="8">
+          <el-form-item label="品牌" prop="brand">
+            <el-input v-model="formData.brand" placeholder="请输入品牌" />
+          </el-form-item>
+        </el-col>
         <el-col :span="8">
           <el-form-item label="规格型号" prop="specification">
             <el-input v-model="formData.specification" placeholder="请输入规格型号" />
           </el-form-item>
         </el-col>
+      </el-row>
+
+      <el-row :gutter="16">
+        <el-col :span="24">
+          <el-form-item label="标配电池 SN" prop="standardBatteryCodes">
+            <el-select
+              v-model="formData.standardBatteryCodes"
+              multiple
+              filterable
+              allow-create
+              default-first-option
+              placeholder="录入或选择标配电池 SN"
+              class="!w-1/1"
+            >
+              <el-option
+                v-for="item in batteryOptions"
+                :key="item.value"
+                :label="item.label"
+                :value="item.value"
+              />
+            </el-select>
+          </el-form-item>
+        </el-col>
+      </el-row>
+
+      <el-row :gutter="16">
         <el-col v-if="isDetail" :span="8">
-          <el-form-item label="最近点检时间" prop="lastCheckTime">
+          <el-form-item label="最近点检时间">
             <el-date-picker
               v-model="formData.lastCheckTime"
               type="datetime"
@@ -74,7 +116,7 @@
           </el-form-item>
         </el-col>
         <el-col v-if="isDetail" :span="8">
-          <el-form-item label="最近保养时间" prop="lastMaintenTime">
+          <el-form-item label="最近保养时间">
             <el-date-picker
               v-model="formData.lastMaintenTime"
               type="datetime"
@@ -84,7 +126,13 @@
             />
           </el-form-item>
         </el-col>
+        <el-col v-if="isDetail" :span="8">
+          <el-form-item label="建档附件数">
+            <el-input :model-value="String(documentCount)" disabled />
+          </el-form-item>
+        </el-col>
       </el-row>
+
       <el-row>
         <el-col :span="24">
           <el-form-item label="备注" prop="remark">
@@ -94,157 +142,217 @@
       </el-row>
     </el-form>
 
-    <!-- 编辑/详情时显示子资源 Tab -->
-    <el-tabs v-if="formType !== 'create' && formData.id" v-model="activeTab" class="mt-10px">
-      <el-tab-pane label="点检记录" name="check" lazy>
-        <MachineryCheckRecordList :machinery-id="formData.id" />
-      </el-tab-pane>
-      <el-tab-pane label="保养记录" name="mainten" lazy>
-        <MachineryMaintenRecordList :machinery-id="formData.id" />
-      </el-tab-pane>
-      <el-tab-pane label="维修记录" name="repair" lazy>
-        <MachineryRepairList :machinery-id="formData.id" />
-      </el-tab-pane>
-    </el-tabs>
     <template #footer>
-      <el-button v-if="isDetail && formData.id" type="primary" plain @click="handleBarcode">
-        查看条码
-      </el-button>
       <el-button v-if="!isDetail" @click="submitForm" type="primary" :disabled="formLoading">
-        确 定
+        确定
       </el-button>
-      <el-button @click="dialogVisible = false">取 消</el-button>
+      <el-button @click="dialogVisible = false">取消</el-button>
     </template>
   </Dialog>
-  <!-- 条码详情弹窗（详情模式下展示） -->
-  <BarcodeDetail ref="barcodeDetailRef" />
 </template>
+
 <script setup lang="ts">
-import { getIntDictOptions, DICT_TYPE } from '@/utils/dict'
 import { DvMachineryApi, DvMachineryVO } from '@/api/mes/dv/machinery'
-import MdWorkshopSelect from '@/views/mes/md/workstation/components/MdWorkshopSelect.vue'
+import { MdWorkshopApi, type MdWorkshopVO } from '@/api/mes/md/workstation/workshop'
+import {
+  ASSET_DEVICE_ENABLE_STATUS_OPTIONS,
+  getMachineryStatusByEnableStatus,
+  listDeviceBatteryOptions,
+  resolveAssetDeviceMasterRecord,
+  saveAssetDeviceMasterRecord,
+  type AssetDeviceEnableStatus
+} from '@/api/yian/asset/deviceMaster'
 import DvMachineryTypeSelect from '@/views/mes/dv/machinery/type/components/DvMachineryTypeSelect.vue'
-import MachineryCheckRecordList from './MachineryCheckRecordList.vue'
-import MachineryMaintenRecordList from './MachineryMaintenRecordList.vue'
-import MachineryRepairList from './MachineryRepairList.vue'
-import { MesDvMachineryStatusEnum, MesAutoCodeRuleCode, BarcodeBizTypeEnum } from '@/views/mes/utils/constants'
+import { MesAutoCodeRuleCode } from '@/views/mes/utils/constants'
 import { AutoCodeRecordApi } from '@/api/mes/md/autocode/record'
-import { BarcodeDetail } from '@/views/mes/wm/barcode/components'
 
 defineOptions({ name: 'MachineryForm' })
 
-const { t } = useI18n() // 国际化
-const message = useMessage() // 消息弹窗
+type MachineryFormData = {
+  id?: number
+  code?: string
+  serialNumber: string
+  name?: string
+  brand?: string
+  specification?: string
+  machineryTypeId?: number
+  machineryTypeName?: string
+  workshopId?: number
+  workshopName?: string
+  ownerName: string
+  enableStatus: AssetDeviceEnableStatus
+  standardBatteryCodes: string[]
+  lastCheckTime?: string | number
+  lastMaintenTime?: string | number
+  remark?: string
+}
 
-const dialogVisible = ref(false) // 弹窗的是否展示
-const formLoading = ref(false) // 表单的加载中：1）修改时的数据加载；2）提交的按钮禁用
-const formType = ref('') // 表单的类型：create - 新增；update - 修改；detail - 详情
+const { t } = useI18n()
+const message = useMessage()
+
+const dialogVisible = ref(false)
+const formLoading = ref(false)
+const formType = ref<'create' | 'update' | 'detail'>('create')
 const isDetail = computed(() => formType.value === 'detail')
 const dialogTitle = computed(() => {
-  const titles: Record<string, string> = {
+  const titles = {
     create: '新增设备',
-    update: '修改设备',
+    update: '编辑设备',
     detail: '查看设备'
   }
-  return titles[formType.value] || formType.value
+  return titles[formType.value]
 })
-const activeTab = ref('check') // 当前激活的资源 Tab
-const formData = ref({
+
+const formRef = ref()
+const workshopOptions = ref<MdWorkshopVO[]>([])
+const batteryOptions = computed(() => listDeviceBatteryOptions())
+const previousCode = ref('')
+const documentCount = ref(0)
+
+const createDefaultFormData = (): MachineryFormData => ({
   id: undefined,
-  code: undefined,
-  name: undefined,
-  brand: undefined,
-  specification: undefined,
+  code: '',
+  serialNumber: '',
+  name: '',
+  brand: '',
+  specification: '',
   machineryTypeId: undefined,
+  machineryTypeName: '',
   workshopId: undefined,
-  status: MesDvMachineryStatusEnum.STOP,
+  workshopName: '',
+  ownerName: '',
+  enableStatus: 'enabled',
+  standardBatteryCodes: [],
   lastCheckTime: undefined,
   lastMaintenTime: undefined,
-  remark: undefined
+  remark: ''
 })
+
+const formData = ref<MachineryFormData>(createDefaultFormData())
+
 const formRules = reactive({
-  code: [{ required: true, message: '设备编码不能为空', trigger: 'blur' }],
+  code: [{ required: true, message: '设备编号不能为空', trigger: 'blur' }],
+  serialNumber: [{ required: true, message: '序列号不能为空', trigger: 'blur' }],
   name: [{ required: true, message: '设备名称不能为空', trigger: 'blur' }],
   machineryTypeId: [{ required: true, message: '设备类型不能为空', trigger: 'change' }],
-  workshopId: [{ required: true, message: '所属车间不能为空', trigger: 'change' }],
-  status: [{ required: true, message: '设备状态不能为空', trigger: 'change' }]
+  workshopId: [{ required: true, message: '所属站点不能为空', trigger: 'change' }],
+  ownerName: [{ required: true, message: '责任人不能为空', trigger: 'blur' }],
+  enableStatus: [{ required: true, message: '启用状态不能为空', trigger: 'change' }]
 })
-const formRef = ref() // 表单 Ref
-const barcodeDetailRef = ref() // 条码详情弹窗 Ref
 
-/** 查看条码 */
-const handleBarcode = () => {
-  barcodeDetailRef.value?.openByBusiness(
-    formData.value.id!, BarcodeBizTypeEnum.MACHINERY, formData.value.code, formData.value.name
-  )
+const loadWorkshopOptions = async () => {
+  workshopOptions.value = await MdWorkshopApi.getWorkshopSimpleList()
 }
 
-/** 生成设备编码 */
+const syncWorkshopMeta = () => {
+  const current = workshopOptions.value.find((item) => item.id === formData.value.workshopId)
+  formData.value.workshopName = current?.name || ''
+  if (!formData.value.ownerName && current?.chargeUserName) {
+    formData.value.ownerName = current.chargeUserName
+  }
+}
+
+watch(
+  () => formData.value.workshopId,
+  () => {
+    syncWorkshopMeta()
+  }
+)
+
 const generateCode = async () => {
-  formData.value.code = await AutoCodeRecordApi.generateAutoCode(
-    MesAutoCodeRuleCode.DV_MACHINERY_CODE
-  )
+  formData.value.code = await AutoCodeRecordApi.generateAutoCode(MesAutoCodeRuleCode.DV_MACHINERY_CODE)
 }
 
-/** 打开弹窗 */
-const open = async (type: string, id?: number) => {
+const open = async (type: 'create' | 'update' | 'detail', id?: number) => {
   dialogVisible.value = true
   formType.value = type
   resetForm()
-  // 修改/详情时，设置数据
-  if (id) {
-    formLoading.value = true
-    try {
-      formData.value = await DvMachineryApi.getMachinery(id)
-    } finally {
-      formLoading.value = false
-    }
-    activeTab.value = 'check'
-  }
-}
-defineExpose({ open }) // 提供 open 方法，用于打开弹窗
-
-/** 提交表单 */
-const emit = defineEmits(['success']) // 定义 success 事件，用于操作成功后的回调
-const submitForm = async () => {
-  // 校验表单
-  await formRef.value.validate()
-  // 提交请求
+  await loadWorkshopOptions()
+  if (!id) return
   formLoading.value = true
   try {
-    const data = formData.value as unknown as DvMachineryVO
+    const machinery = await DvMachineryApi.getMachinery(id)
+    const assetRecord = resolveAssetDeviceMasterRecord(machinery)
+    previousCode.value = machinery.code || ''
+    documentCount.value = assetRecord.documents.length
+    formData.value = {
+      id: machinery.id,
+      code: machinery.code,
+      serialNumber: assetRecord.serialNumber,
+      name: machinery.name,
+      brand: machinery.brand,
+      specification: machinery.specification,
+      machineryTypeId: machinery.machineryTypeId,
+      machineryTypeName: machinery.machineryTypeName,
+      workshopId: machinery.workshopId,
+      workshopName: assetRecord.siteName,
+      ownerName: assetRecord.ownerName,
+      enableStatus: assetRecord.enableStatus,
+      standardBatteryCodes: [...assetRecord.standardBatteryCodes],
+      lastCheckTime: machinery.lastCheckTime,
+      lastMaintenTime: machinery.lastMaintenTime,
+      remark: machinery.remark
+    }
+  } finally {
+    formLoading.value = false
+  }
+}
+defineExpose({ open })
+
+const emit = defineEmits(['success'])
+
+const submitForm = async () => {
+  await formRef.value.validate()
+  formLoading.value = true
+  try {
+    const payload: DvMachineryVO = {
+      id: formData.value.id as number,
+      code: formData.value.code || '',
+      name: formData.value.name || '',
+      brand: formData.value.brand || '',
+      specification: formData.value.specification || '',
+      machineryTypeId: formData.value.machineryTypeId as number,
+      machineryTypeName: formData.value.machineryTypeName || '',
+      workshopId: formData.value.workshopId as number,
+      workshopName:
+        workshopOptions.value.find((item) => item.id === formData.value.workshopId)?.name ||
+        formData.value.workshopName ||
+        '',
+      status: getMachineryStatusByEnableStatus(formData.value.enableStatus),
+      lastMaintenTime: formData.value.lastMaintenTime as Date,
+      lastCheckTime: formData.value.lastCheckTime as Date,
+      remark: formData.value.remark || ''
+    }
+
     if (formType.value === 'create') {
-      await DvMachineryApi.createMachinery(data)
+      await DvMachineryApi.createMachinery(payload)
       message.success(t('common.createSuccess'))
     } else {
-      await DvMachineryApi.updateMachinery(data)
+      await DvMachineryApi.updateMachinery(payload)
       message.success(t('common.updateSuccess'))
     }
+
+    saveAssetDeviceMasterRecord(payload, {
+      previousCode: previousCode.value || undefined,
+      code: formData.value.code || '',
+      serialNumber: formData.value.serialNumber,
+      siteName: payload.workshopName || '待补录',
+      ownerName: formData.value.ownerName,
+      enableStatus: formData.value.enableStatus,
+      standardBatteryCodes: [...formData.value.standardBatteryCodes]
+    })
+
     dialogVisible.value = false
-    // 发送操作成功的事件
     emit('success')
   } finally {
     formLoading.value = false
   }
 }
 
-/** 重置表单 */
 const resetForm = () => {
-  formData.value = {
-    id: undefined,
-    code: undefined,
-    name: undefined,
-    brand: undefined,
-    specification: undefined,
-    machineryTypeId: undefined,
-    workshopId: undefined,
-    status: MesDvMachineryStatusEnum.STOP,
-    lastCheckTime: undefined,
-    lastMaintenTime: undefined,
-    remark: undefined
-  }
-
+  previousCode.value = ''
+  documentCount.value = 0
+  formData.value = createDefaultFormData()
   formRef.value?.resetFields()
-  activeTab.value = 'check'
 }
 </script>

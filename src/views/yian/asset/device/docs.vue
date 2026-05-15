@@ -28,58 +28,47 @@
             <template #header>
               <div class="card-header">建档附件列表</div>
             </template>
-            <el-table :data="documents" stripe>
+            <el-table :data="record.documents" stripe>
               <el-table-column label="附件名称" prop="fileName" min-width="220" />
               <el-table-column label="资料类型" prop="documentType" width="140" />
-              <el-table-column label="解析结果" prop="parseResult" min-width="260" />
+              <el-table-column label="解析结果" prop="parseResult" min-width="240" />
               <el-table-column label="解析来源" prop="parseSource" width="120" />
               <el-table-column label="上传人" prop="uploadedBy" width="120" />
               <el-table-column label="上传时间" prop="uploadedAt" width="180" />
             </el-table>
-            <el-empty v-if="!documents.length" description="当前没有建档附件" class="mt-20px" />
+            <el-empty v-if="!record.documents.length" description="当前没有建档附件" class="mt-20px" />
           </el-card>
         </el-col>
         <el-col :xs="24" :lg="8">
           <el-card shadow="never">
             <template #header>
-              <div class="card-header">缺失与提醒</div>
+              <div class="card-header">附件解析摘要</div>
             </template>
-            <el-alert
-              title="主档资料删除需逻辑删除并触发重新解析，当前页先按原型展示解析提示。"
-              type="info"
-              :closable="false"
-              show-icon
-              class="mb-12px"
-            />
-            <el-alert
-              v-for="(warning, index) in profile.warnings"
-              :key="`warning-${index}`"
-              :title="warning"
-              type="warning"
-              :closable="false"
-              show-icon
-              class="mb-12px"
-            />
-            <el-alert
-              v-for="(item, index) in profile.missingItems"
-              :key="`missing-${index}`"
-              :title="item"
-              type="error"
-              :closable="false"
-              show-icon
-              class="mb-12px"
-            />
-            <el-descriptions :column="1" border class="mt-16px">
-              <el-descriptions-item label="解析摘要">
-                {{ profile.parseSummary }}
-              </el-descriptions-item>
-              <el-descriptions-item label="解析来源">
-                {{ profile.parseSource }}
-              </el-descriptions-item>
-              <el-descriptions-item label="最近更新时间">
-                {{ profile.parseUpdatedAt }}
-              </el-descriptions-item>
+            <el-descriptions :column="1" border>
+              <el-descriptions-item label="解析摘要">{{ record.parseSummary }}</el-descriptions-item>
+              <el-descriptions-item label="解析来源">{{ record.parseSource }}</el-descriptions-item>
+              <el-descriptions-item label="最近解析时间">{{ record.parseUpdatedAt }}</el-descriptions-item>
             </el-descriptions>
+            <div class="mt-16px">
+              <el-alert
+                v-for="(warning, index) in record.warnings"
+                :key="`warning-${index}`"
+                :title="warning"
+                type="warning"
+                :closable="false"
+                show-icon
+                class="mb-12px"
+              />
+              <el-alert
+                v-for="(item, index) in record.missingItems"
+                :key="`missing-${index}`"
+                :title="item"
+                type="error"
+                :closable="false"
+                show-icon
+                class="mb-12px"
+              />
+            </div>
           </el-card>
         </el-col>
       </el-row>
@@ -92,7 +81,7 @@
 <script lang="ts" setup>
 import { ContentWrap } from '@/components/ContentWrap'
 import { DvMachineryApi, DvMachineryVO } from '@/api/mes/dv/machinery'
-import { resolveAssetDeviceProfile } from '@/api/yian/asset'
+import { resolveAssetDeviceMasterRecord, type AssetDeviceMasterRecordVO } from '@/api/yian/asset/deviceMaster'
 
 defineOptions({ name: 'AssetDeviceDocs' })
 
@@ -102,9 +91,7 @@ const message = useMessage()
 
 const loading = ref(false)
 const device = ref<DvMachineryVO | null>(null)
-
-const profile = computed(() => resolveAssetDeviceProfile(device.value))
-const documents = computed(() => profile.value.documents)
+const record = ref<AssetDeviceMasterRecordVO>(resolveAssetDeviceMasterRecord(null))
 
 const getDeviceId = () => Number(route.params.id)
 
@@ -116,7 +103,9 @@ const getDetail = async () => {
   }
   loading.value = true
   try {
-    device.value = await DvMachineryApi.getMachinery(id)
+    const machinery = await DvMachineryApi.getMachinery(id)
+    device.value = machinery
+    record.value = resolveAssetDeviceMasterRecord(machinery)
   } finally {
     loading.value = false
   }
@@ -127,12 +116,22 @@ const goBack = () => {
 }
 
 const handleUpload = () => {
-  message.info('MVP 当前先复用建档附件台账展示，上传入口将在下一轮接入真实附件服务。')
+  message.info('MVP 当前先展示建档附件台账，附件上传将在下一轮接入真实服务。')
 }
 
 const handleReparse = () => {
-  message.success('已模拟触发重新解析，当前页会继续按最新主档摘要展示结果。')
+  message.success('已按当前建档附件触发重新解析，解析摘要会以最新结果为准。')
 }
+
+watch(
+  () => route.query.action,
+  (action) => {
+    if (action === 'upload') {
+      message.info('已进入建档附件页，你可以在这里发起附件上传和解析查看。')
+    }
+  },
+  { immediate: true }
+)
 
 watch(
   () => route.params.id,

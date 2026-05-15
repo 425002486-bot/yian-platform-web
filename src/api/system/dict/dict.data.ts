@@ -1,4 +1,5 @@
 import request from '@/config/axios'
+import { isLocalMesDemoEnabled } from '@/api/mes/localDemo'
 
 export interface DictDataVO {
   id: number
@@ -15,7 +16,14 @@ export interface DictDataVO {
 
 // 查询字典数据（精简)列表
 export const getSimpleDictDataList = () => {
-  return request.get({ url: '/system/dict-data/simple-list' })
+  return request
+    .get({ url: '/system/dict-data/simple-list' })
+    .catch((error) => {
+      if (isLocalMesDemoEnabled()) {
+        return []
+      }
+      throw error
+    })
 }
 
 // 查询字典数据列表

@@ -13,24 +13,22 @@
         <el-col :xs="24" :md="8">
           <el-card shadow="hover" class="summary-block">
             <div class="summary-block__title">当前状态</div>
-            <div class="summary-block__headline">{{ profile.currentStage }}</div>
-            <div class="summary-block__text">{{ profile.statusReason }}</div>
+            <div class="summary-block__headline">{{ record.currentStatusLabel }}</div>
+            <div class="summary-block__text">{{ record.statusReason }}</div>
           </el-card>
         </el-col>
         <el-col :xs="24" :md="8">
           <el-card shadow="hover" class="summary-block">
-            <div class="summary-block__title">资料解析</div>
-            <div class="summary-block__headline">{{ profile.parseSummary }}</div>
-            <div class="summary-block__text">{{ profile.parseUpdatedAt }}</div>
+            <div class="summary-block__title">建档附件解析</div>
+            <div class="summary-block__headline">{{ record.parseSummary }}</div>
+            <div class="summary-block__text">{{ record.parseUpdatedAt }}</div>
           </el-card>
         </el-col>
         <el-col :xs="24" :md="8">
           <el-card shadow="hover" class="summary-block">
-            <div class="summary-block__title">关联事项</div>
-            <div class="summary-block__headline">{{ profile.workorderSummary }}</div>
-            <div class="summary-block__text">
-              关联电池：{{ profile.linkedBatteries.join('、') || '无' }}
-            </div>
+            <div class="summary-block__title">最近巡检</div>
+            <div class="summary-block__headline">{{ record.latestInspectionAt || '暂无记录' }}</div>
+            <div class="summary-block__text">{{ record.latestInspectionConclusion }}</div>
           </el-card>
         </el-col>
       </el-row>
@@ -39,10 +37,10 @@
         <template #header>
           <div class="card-header">电子履历时间线</div>
         </template>
-        <el-empty v-if="!history.length" description="当前没有设备履历记录" />
+        <el-empty v-if="!record.history.length" description="当前没有设备履历记录" />
         <el-timeline v-else>
           <el-timeline-item
-            v-for="event in history"
+            v-for="event in record.history"
             :key="event.id"
             :timestamp="event.happenedAt"
             :type="timelineTypeMap[event.tone]"
@@ -52,7 +50,7 @@
               <div class="timeline-title">{{ event.title }}</div>
               <div class="timeline-stage">{{ event.stage }}</div>
               <div class="timeline-detail">{{ event.detail }}</div>
-              <div class="timeline-evidence">依据：{{ event.evidence }}</div>
+              <div class="timeline-evidence">{{ event.evidence }}</div>
             </el-card>
           </el-timeline-item>
         </el-timeline>
@@ -66,7 +64,7 @@
 <script lang="ts" setup>
 import { ContentWrap } from '@/components/ContentWrap'
 import { DvMachineryApi, DvMachineryVO } from '@/api/mes/dv/machinery'
-import { resolveAssetDeviceProfile } from '@/api/yian/asset'
+import { resolveAssetDeviceMasterRecord, type AssetDeviceMasterRecordVO } from '@/api/yian/asset/deviceMaster'
 
 defineOptions({ name: 'AssetDeviceHistory' })
 
@@ -75,9 +73,8 @@ const route = useRoute()
 
 const loading = ref(false)
 const device = ref<DvMachineryVO | null>(null)
+const record = ref<AssetDeviceMasterRecordVO>(resolveAssetDeviceMasterRecord(null))
 
-const profile = computed(() => resolveAssetDeviceProfile(device.value))
-const history = computed(() => profile.value.history)
 const timelineTypeMap = {
   success: 'success',
   warning: 'warning',
@@ -95,7 +92,9 @@ const getDetail = async () => {
   }
   loading.value = true
   try {
-    device.value = await DvMachineryApi.getMachinery(id)
+    const machinery = await DvMachineryApi.getMachinery(id)
+    device.value = machinery
+    record.value = resolveAssetDeviceMasterRecord(machinery)
   } finally {
     loading.value = false
   }

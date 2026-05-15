@@ -7,6 +7,14 @@
     >
       <template #extra>
         <el-space wrap>
+          <el-button @click="handleEdit">
+            <Icon icon="ep:edit" class="mr-4px" />
+            编辑
+          </el-button>
+          <el-button @click="goInspection">
+            <Icon icon="ep:checked" class="mr-4px" />
+            设备巡检
+          </el-button>
           <el-button @click="goDocs">
             <Icon icon="ep:document" class="mr-4px" />
             建档附件
@@ -17,7 +25,7 @@
           </el-button>
           <el-button type="primary" @click="goWorkorders">
             <Icon icon="ep:tickets" class="mr-4px" />
-            关联工单
+            关联工单列表
           </el-button>
         </el-space>
       </template>
@@ -30,149 +38,156 @@
         <el-col :xs="24" :md="8">
           <el-card shadow="hover" class="summary-block">
             <div class="summary-block__title">当前状态</div>
-            <dict-tag :type="DICT_TYPE.MES_DV_MACHINERY_STATUS" :value="device.status" />
-            <div class="summary-block__headline mt-10px">{{ profile.currentStage }}</div>
-            <div class="summary-block__text">{{ profile.statusReason }}</div>
-            <div class="summary-block__hint">依据：{{ profile.statusSource }}</div>
+            <el-tag :type="record.currentStatusTagType">{{ record.currentStatusLabel }}</el-tag>
+            <div class="summary-block__headline mt-10px">{{ record.currentStage }}</div>
+            <div class="summary-block__text">{{ record.statusReason }}</div>
+            <div class="summary-block__hint">{{ record.statusSource }}</div>
           </el-card>
         </el-col>
         <el-col :xs="24" :md="8">
           <el-card shadow="hover" class="summary-block">
-            <div class="summary-block__title">资料解析摘要</div>
-            <div class="summary-block__headline">{{ profile.parseSummary }}</div>
-            <div class="summary-block__text">{{ profile.parseSource }}</div>
-            <div class="summary-block__hint">更新时间：{{ profile.parseUpdatedAt }}</div>
+            <div class="summary-block__title">启用状态</div>
+            <div class="summary-block__headline">{{ record.enableStatusLabel }}</div>
+            <div class="summary-block__text">状态更新时间：{{ record.statusUpdatedAt }}</div>
+            <div class="summary-block__hint">{{ record.inspectionDueText }}</div>
           </el-card>
         </el-col>
         <el-col :xs="24" :md="8">
           <el-card shadow="hover" class="summary-block">
-            <div class="summary-block__title">关联电池</div>
-            <div class="summary-block__headline">{{ linkedBatteries.length }} 组</div>
-            <div class="summary-block__text">
-              {{ batterySummary || '当前未绑定电池资产' }}
+            <div class="summary-block__title">标配电池</div>
+            <div class="summary-block__headline">{{ record.standardBatteryCodes.length }} 块</div>
+            <div class="summary-block__text">{{ standardBatteryLabel }}</div>
+            <div class="summary-block__hint">
+              {{ record.latestAttachmentWarning || '当前暂无新的识别提示' }}
             </div>
-            <div class="summary-block__hint">来源：BMS / 检测工装 / 人工导入附件</div>
           </el-card>
         </el-col>
       </el-row>
 
       <el-descriptions :column="3" border class="mt-20px">
-        <el-descriptions-item label="设备编码">{{ device.code || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="设备编号">{{ device.code || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="序列号">{{ record.serialNumber || '-' }}</el-descriptions-item>
         <el-descriptions-item label="设备名称">{{ device.name || '-' }}</el-descriptions-item>
-        <el-descriptions-item label="序列号">
-          {{ profile.serialNumber || '-' }}
-        </el-descriptions-item>
-        <el-descriptions-item label="设备状态">
-          <dict-tag :type="DICT_TYPE.MES_DV_MACHINERY_STATUS" :value="device.status" />
-        </el-descriptions-item>
-        <el-descriptions-item label="设备类型">
-          {{ profile.assetCategory }}
-        </el-descriptions-item>
-        <el-descriptions-item label="品牌">
-          {{ device.brand || '-' }}
-        </el-descriptions-item>
-        <el-descriptions-item label="规格型号">
-          {{ device.specification || '-' }}
-        </el-descriptions-item>
-        <el-descriptions-item label="所属站点">
-          {{ profile.siteName || '-' }}
-        </el-descriptions-item>
-        <el-descriptions-item label="所属车间">
-          {{ device.workshopName || '-' }}
-        </el-descriptions-item>
-        <el-descriptions-item label="责任人">
-          {{ profile.ownerName || '-' }}
-        </el-descriptions-item>
-        <el-descriptions-item label="最近保养">
-          {{ formatDateSafe(device.lastMaintenTime) }}
-        </el-descriptions-item>
-        <el-descriptions-item label="最近点检">
-          {{ formatDateSafe(device.lastCheckTime) }}
-        </el-descriptions-item>
-        <el-descriptions-item label="创建时间">
-          {{ formatDateSafe(device.createTime) }}
-        </el-descriptions-item>
-        <el-descriptions-item label="备注" :span="2">
-          {{ device.remark || '-' }}
-        </el-descriptions-item>
+        <el-descriptions-item label="设备类型">{{ device.machineryTypeName || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="所属站点">{{ record.siteName || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="责任人">{{ record.ownerName || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="启用状态">{{ record.enableStatusLabel }}</el-descriptions-item>
+        <el-descriptions-item label="当前状态">{{ record.currentStatusLabel }}</el-descriptions-item>
+        <el-descriptions-item label="标配电池">{{ standardBatteryLabel }}</el-descriptions-item>
+        <el-descriptions-item label="品牌">{{ device.brand || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="规格型号">{{ device.specification || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="最近巡检">{{ record.latestInspectionAt || '暂无记录' }}</el-descriptions-item>
+        <el-descriptions-item label="最近保养">{{ formatDateSafe(device.lastMaintenTime) }}</el-descriptions-item>
+        <el-descriptions-item label="创建时间">{{ formatDateSafe(device.createTime) }}</el-descriptions-item>
+        <el-descriptions-item label="备注" :span="2">{{ device.remark || '-' }}</el-descriptions-item>
       </el-descriptions>
 
-      <el-row :gutter="16" class="mt-20px">
-        <el-col :xs="24" :lg="12">
-          <el-card shadow="never">
-            <template #header>
-              <div class="card-header">主档解析结果</div>
-            </template>
-            <el-descriptions :column="1" border>
-              <el-descriptions-item
-                v-for="field in profile.parsedFields"
-                :key="field.label"
-                :label="field.label"
-              >
-                {{ field.value }}
-              </el-descriptions-item>
-            </el-descriptions>
-          </el-card>
-        </el-col>
-        <el-col :xs="24" :lg="12">
-          <el-card shadow="never">
-            <template #header>
-              <div class="card-header">缺失与预警</div>
-            </template>
-            <el-empty
-              v-if="!profile.warnings.length && !profile.missingItems.length"
-              description="当前没有额外预警"
-            />
-            <template v-else>
-              <el-alert
-                v-for="(warning, index) in profile.warnings"
-                :key="`warning-${index}`"
-                :title="warning"
-                type="warning"
-                :closable="false"
-                show-icon
-                class="mb-12px"
-              />
-              <el-alert
-                v-for="(item, index) in profile.missingItems"
-                :key="`missing-${index}`"
-                :title="item"
-                type="error"
-                :closable="false"
-                show-icon
-                class="mb-12px"
-              />
-            </template>
-          </el-card>
-        </el-col>
-      </el-row>
+      <el-card shadow="never" class="mt-20px">
+        <template #header>
+          <div class="card-header">建档资料</div>
+        </template>
+        <div class="prototype-stack">
+          <div class="prototype-item">
+            <div class="prototype-item__header">
+              <span class="prototype-item__title">建档信息</span>
+              <el-tag type="info" round>已录入</el-tag>
+            </div>
+            <div class="prototype-item__desc">{{ archiveInfoText }}</div>
+          </div>
 
-      <el-tabs v-model="activeTab" class="mt-20px" @tab-change="handleTabChange">
-        <el-tab-pane label="关联工单" name="workorders" lazy>
-          <MachineryRepairList :machinery-id="device.id" />
-        </el-tab-pane>
-        <el-tab-pane label="保养记录" name="mainten" lazy>
-          <MachineryMaintenRecordList :machinery-id="device.id" />
-        </el-tab-pane>
-        <el-tab-pane label="点检记录" name="check" lazy>
-          <MachineryCheckRecordList :machinery-id="device.id" />
-        </el-tab-pane>
-      </el-tabs>
+          <div class="prototype-item">
+            <div class="prototype-item__header">
+              <span class="prototype-item__title">证照材料</span>
+              <el-tag type="success" round>{{ documentStatusLabel }}</el-tag>
+            </div>
+            <div class="prototype-item__desc">{{ documentSummary }}</div>
+            <el-button class="mt-16px" round @click="goDocs">查看建档附件</el-button>
+          </div>
+        </div>
+      </el-card>
+
+      <el-card shadow="never" class="mt-20px">
+        <template #header>
+          <div class="card-header">主档资料解析结果</div>
+        </template>
+        <div class="prototype-stack">
+          <div class="prototype-item">
+            <div class="prototype-item__header">
+              <span class="prototype-item__title">解析摘要</span>
+              <el-tag type="info" round>{{ parsedFieldCountLabel }}</el-tag>
+            </div>
+            <div class="prototype-item__desc">{{ parseSummaryText }}</div>
+          </div>
+
+          <div class="prototype-item">
+            <div class="prototype-item__header">
+              <span class="prototype-item__title">设备号比对</span>
+              <el-tag :type="deviceCompareTag.type" round>{{ deviceCompareTag.label }}</el-tag>
+            </div>
+            <div class="prototype-item__desc">{{ deviceCompareText }}</div>
+          </div>
+
+          <div class="prototype-item">
+            <div class="prototype-item__header">
+              <span class="prototype-item__title">有效期抽取</span>
+              <el-tag :type="validityTag.type" round>{{ validityTag.label }}</el-tag>
+            </div>
+            <div class="prototype-item__desc">{{ validityText }}</div>
+          </div>
+
+          <div class="prototype-item">
+            <div class="prototype-item__header">
+              <span class="prototype-item__title">疑似缺失项</span>
+              <el-tag :type="missingTag.type" round>{{ missingTag.label }}</el-tag>
+            </div>
+            <div class="prototype-item__desc">{{ missingText }}</div>
+          </div>
+        </div>
+      </el-card>
+
+      <el-card ref="inspectionSectionRef" shadow="never" class="mt-20px">
+        <template #header>
+          <div class="card-header flex justify-between items-center">
+            <span>设备巡检记录</span>
+            <el-button type="primary" link @click="goInspection">发起巡检</el-button>
+          </div>
+        </template>
+        <el-table :data="record.inspections" stripe :row-class-name="inspectionRowClassName">
+          <el-table-column label="巡检时间" prop="inspectedAt" width="160" />
+          <el-table-column label="巡检人" prop="inspector" width="120" />
+          <el-table-column label="巡检周期" prop="cycleLabel" width="140" />
+          <el-table-column label="结论" width="120">
+            <template #default="{ row }">
+              <el-tag :type="inspectionTagType(row.conclusion)">{{ row.conclusionLabel }}</el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="检查摘要" min-width="320">
+            <template #default="{ row }">
+              <div>{{ row.structureStatus }}</div>
+              <div class="text-secondary">{{ row.notes || row.evidence || '-' }}</div>
+            </template>
+          </el-table-column>
+        </el-table>
+        <el-empty v-if="!record.inspections.length" description="暂无设备巡检记录" class="mt-16px" />
+      </el-card>
     </template>
 
     <el-empty v-else description="未找到对应设备数据" class="mt-20px" />
   </ContentWrap>
+
+  <MachineryForm ref="formRef" @success="getDetail" />
 </template>
 
 <script lang="ts" setup>
 import { ContentWrap } from '@/components/ContentWrap'
 import { DvMachineryApi, DvMachineryVO } from '@/api/mes/dv/machinery'
-import { listLinkedBatteries, resolveAssetDeviceProfile } from '@/api/yian/asset'
-import { DICT_TYPE } from '@/utils/dict'
+import {
+  resolveAssetDeviceMasterRecord,
+  type AssetDeviceInspectionRecordVO,
+  type AssetDeviceMasterRecordVO
+} from '@/api/yian/asset/deviceMaster'
 import { formatDate } from '@/utils/formatTime'
-import MachineryRepairList from '@/views/mes/dv/machinery/MachineryRepairList.vue'
-import MachineryMaintenRecordList from '@/views/mes/dv/machinery/MachineryMaintenRecordList.vue'
-import MachineryCheckRecordList from '@/views/mes/dv/machinery/MachineryCheckRecordList.vue'
+import MachineryForm from '@/views/mes/dv/machinery/MachineryForm.vue'
 
 defineOptions({ name: 'AssetDeviceDetail' })
 
@@ -185,23 +200,108 @@ const route = useRoute()
 
 const loading = ref(false)
 const device = ref<MachineryDetail | null>(null)
-const activeTab = ref('workorders')
+const record = ref<AssetDeviceMasterRecordVO>(resolveAssetDeviceMasterRecord(null))
+const formRef = ref()
+const inspectionSectionRef = ref()
 
-const profile = computed(() => resolveAssetDeviceProfile(device.value))
-const linkedBatteries = computed(() => listLinkedBatteries(device.value?.code))
-const batterySummary = computed(() =>
-  linkedBatteries.value.map((item) => `${item.batteryCode}(${item.healthLabel})`).join('；')
+const standardBatteryLabel = computed(() => {
+  if (!record.value.standardBatteryCodes.length) return '未配置'
+  return record.value.standardBatteryCodes.join('、')
+})
+
+const archiveInfoText = computed(() => {
+  return `录入对象：单台主机。创建人：${record.value.ownerName || '-'}，创建时间：${formatDateSafe(device.value?.createTime)}。`
+})
+
+const documentStatusLabel = computed(() => {
+  if (!record.value.documents.length) return '0 份'
+  return `${record.value.documents.length} 份`
+})
+
+const documentSummary = computed(() => {
+  if (!record.value.documents.length) {
+    return '当前尚未补齐合格证、采购凭证、校准记录和首飞检查单，建议先进入建档附件台账补录。'
+  }
+  const names = record.value.documents.map((item) => item.documentType).slice(0, 4)
+  return `已上传${names.join('、')}等建档资料，可进入建档附件台账统一查看原件、删除和重新解析结果。`
+})
+
+const parsedFieldCountLabel = computed(() => `${record.value.parsedFields.length} 项`)
+
+const parseSummaryText = computed(() => {
+  if (record.value.parseUpdatedAt && record.value.parseUpdatedAt !== '-') {
+    return `${record.value.parseSummary || '已完成主档资料识别'} 最近识别时间为 ${record.value.parseUpdatedAt}。`
+  }
+  return '当前仅有基础主档信息，尚未补充完整解析资料与设备履历。'
+})
+
+const deviceCompareTag = computed(() => {
+  if (!record.value.parseUpdatedAt || record.value.parseUpdatedAt === '-') {
+    return { label: '待确认', type: 'warning' as const }
+  }
+  const hasMismatch = record.value.warnings.some(
+    (item) => item.includes('设备号') || item.includes('序列号') || item.includes('编号')
+  )
+  return hasMismatch
+    ? { label: '异常', type: 'danger' as const }
+    : { label: '一致', type: 'success' as const }
+})
+
+const deviceCompareText = computed(() => {
+  if (!record.value.parseUpdatedAt || record.value.parseUpdatedAt === '-') {
+    return '尚未完成证照与主档设备号自动比对，建议补充合格证或检测资料后重新解析。'
+  }
+  if (deviceCompareTag.value.label === '异常') {
+    return record.value.warnings.join('；')
+  }
+  return `已将解析资料中的设备标识与当前序列号 ${record.value.serialNumber || '-'} 完成自动比对，当前未发现不一致项。`
+})
+
+const validityTag = computed(() => {
+  if (!record.value.parseUpdatedAt || record.value.parseUpdatedAt === '-') {
+    return { label: '待补', type: 'info' as const }
+  }
+  return record.value.missingItems.length
+    ? { label: '临期', type: 'warning' as const }
+    : { label: '有效', type: 'success' as const }
+})
+
+const validityText = computed(() => {
+  if (!record.value.parseUpdatedAt || record.value.parseUpdatedAt === '-') {
+    return '暂未识别到有效期信息，需上传校准记录或检测资料后自动抽取。'
+  }
+  if (record.value.missingItems.length) {
+    return `识别结果提示仍有资料待补，当前建议在 7 日内补齐并更新主档附件。`
+  }
+  return '当前已完成主要资料识别，可作为状态判断、巡检与放行前核验的依据。'
+})
+
+const missingTag = computed(() => {
+  if (!record.value.missingItems.length) {
+    return { label: '无', type: 'success' as const }
+  }
+  return { label: `${record.value.missingItems.length} 项`, type: 'warning' as const }
+})
+
+const missingText = computed(() => {
+  if (!record.value.missingItems.length) {
+    return '当前未识别到明显缺失项，建档资料完整性满足当前主档展示需求。'
+  }
+  return record.value.missingItems.join('；')
+})
+
+const inspectionHighlightId = computed(() =>
+  typeof route.query.inspectionId === 'string' ? route.query.inspectionId : ''
 )
 
-const syncTabFromRoute = () => {
-  const tab = route.query.tab
-  activeTab.value =
-    typeof tab === 'string' && ['workorders', 'mainten', 'check'].includes(tab)
-      ? tab
-      : 'workorders'
-}
-
 const getDeviceId = () => Number(route.params.id)
+
+const scrollToInspectionSection = async () => {
+  if (route.query.anchor !== 'inspection') return
+  await nextTick()
+  const target = inspectionSectionRef.value?.$el || inspectionSectionRef.value
+  target?.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
+}
 
 const getDetail = async () => {
   const id = getDeviceId()
@@ -211,25 +311,16 @@ const getDetail = async () => {
   }
   loading.value = true
   try {
-    device.value = await DvMachineryApi.getMachinery(id)
+    const machinery = await DvMachineryApi.getMachinery(id)
+    device.value = machinery
+    record.value = resolveAssetDeviceMasterRecord(machinery)
   } finally {
     loading.value = false
   }
+  scrollToInspectionSection()
 }
 
-const formatDateSafe = (value?: string | number | Date) => {
-  return value ? formatDate(value as Date) : '-'
-}
-
-const handleTabChange = (tabName: string | number) => {
-  router.replace({
-    path: route.path,
-    query: {
-      ...route.query,
-      tab: String(tabName)
-    }
-  })
-}
+const formatDateSafe = (value?: string | number | Date) => (value ? formatDate(value as Date) : '-')
 
 const goBack = () => {
   router.push('/asset/device')
@@ -243,23 +334,31 @@ const goHistory = () => {
   router.push(`/asset/device/detail/${getDeviceId()}/history`)
 }
 
+const goInspection = () => {
+  router.push(`/asset/device/detail/${getDeviceId()}/inspection`)
+}
+
 const goWorkorders = () => {
-  router.replace({
-    path: route.path,
-    query: {
-      ...route.query,
-      tab: 'workorders'
-    }
+  if (!device.value?.code) return
+  router.push({
+    path: '/workorder/list',
+    query: { deviceCode: device.value.code }
   })
 }
 
-watch(
-  () => route.query.tab,
-  () => {
-    syncTabFromRoute()
-  },
-  { immediate: true }
-)
+const handleEdit = () => {
+  if (!device.value?.id) return
+  formRef.value?.open('update', device.value.id)
+}
+
+const inspectionTagType = (conclusion: AssetDeviceInspectionRecordVO['conclusion']) => {
+  if (conclusion === 'pass') return 'success'
+  if (conclusion === 'observe') return 'warning'
+  return 'danger'
+}
+
+const inspectionRowClassName = ({ row }: { row: AssetDeviceInspectionRecordVO }) =>
+  row.id === inspectionHighlightId.value ? 'inspection-row--highlight' : ''
 
 watch(
   () => route.params.id,
@@ -268,11 +367,18 @@ watch(
   },
   { immediate: true }
 )
+
+watch(
+  () => route.query.anchor,
+  () => {
+    scrollToInspectionSection()
+  }
+)
 </script>
 
 <style lang="scss" scoped>
 .summary-block {
-  min-height: 180px;
+  min-height: 190px;
 }
 
 .summary-block__title {
@@ -292,7 +398,8 @@ watch(
   line-height: 1.7;
 }
 
-.summary-block__hint {
+.summary-block__hint,
+.text-secondary {
   margin-top: 10px;
   color: var(--el-text-color-secondary);
   line-height: 1.6;
@@ -300,5 +407,39 @@ watch(
 
 .card-header {
   font-weight: 600;
+}
+
+.prototype-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.prototype-item {
+  border: 1px solid var(--el-border-color-light);
+  border-radius: 14px;
+  padding: 18px 18px 16px;
+}
+
+.prototype-item__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.prototype-item__title {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.prototype-item__desc {
+  margin-top: 14px;
+  color: var(--el-text-color-secondary);
+  line-height: 1.8;
+}
+
+:deep(.inspection-row--highlight) {
+  --el-table-tr-bg-color: #f0f9eb;
 }
 </style>

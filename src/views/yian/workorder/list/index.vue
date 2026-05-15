@@ -1,50 +1,123 @@
 <template>
   <ContentWrap>
-    <el-form :inline="true" class="mb-16px">
-      <el-form-item label="工单编号">
-        <el-input v-model="queryParams.orderNo" placeholder="工单编号" clearable class="!w-180px" />
+    <el-form :model="queryParams" :inline="true" class="mb-16px">
+      <el-form-item label="搜索">
+        <el-input
+          v-model="queryParams.keyword"
+          placeholder="工单编号 / 设备编号 / 提交人 / 责任人"
+          clearable
+          class="!w-260px"
+          @keyup.enter="loadData"
+        />
       </el-form-item>
       <el-form-item label="状态">
-        <el-select v-model="queryParams.status" placeholder="全部状态" clearable class="!w-120px">
-          <el-option label="待受理" value="pending" />
-          <el-option label="待初诊" value="diagnosing" />
-          <el-option label="待领料" value="picking" />
-          <el-option label="维修中" value="repairing" />
-          <el-option label="待复检" value="inspecting" />
-          <el-option label="待放行" value="releasing" />
-          <el-option label="已完成" value="completed" />
-          <el-option label="已关闭" value="closed" />
+        <el-select
+          v-model="queryParams.status"
+          placeholder="全部状态"
+          clearable
+          class="!w-150px"
+        >
+          <el-option
+            v-for="item in WORKORDER_STAGE_OPTIONS"
+            :key="item.value"
+            :label="item.label"
+            :value="item.value"
+          />
         </el-select>
       </el-form-item>
-      <el-form-item label="设备">
-        <el-input placeholder="设备编号" clearable class="!w-160px" />
+      <el-form-item label="来源">
+        <el-select
+          v-model="queryParams.source"
+          placeholder="全部来源"
+          clearable
+          class="!w-150px"
+        >
+          <el-option
+            v-for="item in WORKORDER_SOURCE_OPTIONS"
+            :key="item.value"
+            :label="item.label"
+            :value="item.value"
+          />
+        </el-select>
+      </el-form-item>
+      <el-form-item label="风险等级">
+        <el-select
+          v-model="queryParams.riskLevel"
+          placeholder="全部风险"
+          clearable
+          class="!w-150px"
+        >
+          <el-option
+            v-for="item in WORKORDER_RISK_OPTIONS"
+            :key="item.value"
+            :label="item.label"
+            :value="item.value"
+          />
+        </el-select>
       </el-form-item>
       <el-form-item>
-        <el-button type="primary">查询</el-button>
-        <el-button>重置</el-button>
+        <el-button type="primary" @click="loadData">查询</el-button>
+        <el-button @click="resetQuery">重置</el-button>
       </el-form-item>
     </el-form>
 
-    <div class="mb-16px">
-      <el-button type="primary" @click="$router.push('/workorder/create')">新建工单</el-button>
-      <el-button @click="$router.push('/workorder/board')">切换看板视图</el-button>
+    <div class="mb-16px flex flex-wrap gap-12px">
+      <el-button @click="router.push('/workorder/board')">工单看板</el-button>
+      <el-button type="primary" @click="router.push('/workorder/create')">新建工单</el-button>
     </div>
 
+    <el-tabs v-model="activeTab" class="mb-12px">
+      <el-tab-pane :label="`执行中 ${tabCounts.running}`" name="running" />
+      <el-tab-pane :label="`已完成 ${tabCounts.completed}`" name="completed" />
+      <el-tab-pane :label="`已关闭 ${tabCounts.closed}`" name="closed" />
+    </el-tabs>
+
     <el-table :data="workorderList" stripe>
-      <el-table-column label="工单编号" prop="orderNo" width="160" />
-      <el-table-column label="关联设备" prop="deviceNo" width="160" />
-      <el-table-column label="来源" prop="source" width="100" />
-      <el-table-column label="异常现象" prop="symptom" min-width="200" />
-      <el-table-column label="当前节点" prop="statusLabel" width="100">
+      <el-table-column label="工单编号" min-width="170">
+        <template #default="{ row }">
+          <div class="font-600">{{ row.orderNo }}</div>
+          <div class="text-secondary">{{ row.createTime }}</div>
+        </template>
+      </el-table-column>
+      <el-table-column label="设备" min-width="200">
+        <template #default="{ row }">
+          <div>{{ row.deviceCode }}</div>
+          <div class="text-secondary">{{ row.deviceName }} / {{ row.siteName }}</div>
+        </template>
+      </el-table-column>
+      <el-table-column label="当前状态" width="130">
         <template #default="{ row }">
           <el-tag :type="row.tagType">{{ row.statusLabel }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="责任人" prop="owner" width="100" />
-      <el-table-column label="创建时间" prop="createTime" width="160" />
-      <el-table-column label="操作" width="120" fixed="right">
+      <el-table-column label="异常类型" min-width="260">
         <template #default="{ row }">
-          <el-button link type="primary" @click="$router.push(`/workorder/detail/${row.id}`)">详情</el-button>
+          <div>{{ row.sourceLabel }}</div>
+          <div class="text-secondary">{{ row.symptom }}</div>
+        </template>
+      </el-table-column>
+      <el-table-column label="责任人" prop="owner" width="120" />
+      <el-table-column label="节点截止时间" min-width="190">
+        <template #default="{ row }">
+          <div :class="row.overdue ? 'text-danger' : ''">{{ row.slaDeadline }}</div>
+          <div class="text-secondary">
+            {{ row.pendingActionLabel }} / {{ row.riskLevelLabel }}
+          </div>
+        </template>
+      </el-table-column>
+      <el-table-column label="操作" min-width="180" fixed="right">
+        <template #default="{ row }">
+          <el-button link type="primary" @click="router.push(`/workorder/detail/${row.id}`)">
+            工单详情
+          </el-button>
+          <el-button
+            v-if="getCurrentNodeActionLabel(row)"
+            link
+            type="primary"
+            @click="handleCurrentNodeAction(row)"
+          >
+            {{ getCurrentNodeActionLabel(row) }}
+          </el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -53,14 +126,111 @@
 
 <script lang="ts" setup>
 import { ContentWrap } from '@/components/ContentWrap'
+import {
+  WORKORDER_RISK_OPTIONS,
+  WORKORDER_SOURCE_OPTIONS,
+  WORKORDER_STAGE_OPTIONS,
+  YianWorkorderApi,
+  type WorkorderListQuery,
+  type WorkorderVO
+} from '@/api/yian/workorder'
+
 defineOptions({ name: 'WorkorderList' })
 
-const queryParams = reactive({ orderNo: '', status: '' })
+const router = useRouter()
+const route = useRoute()
 
-const workorderList = ref([
-  { id: 1, orderNo: 'WO-20260508-001', deviceNo: 'DJI-M350-0027', source: '飞手上报', symptom: '返航过程中突然失去高度', statusLabel: '待受理', tagType: 'danger', owner: '张工', createTime: '2026-05-08 09:12' },
-  { id: 2, orderNo: 'WO-20260507-003', deviceNo: 'DJI-M30T-0042', source: '巡检发现', symptom: '云台抖动异常', statusLabel: '待初诊', tagType: 'warning', owner: '王工', createTime: '2026-05-07 14:30' },
-  { id: 3, orderNo: 'WO-20260506-004', deviceNo: 'DJI-M300-0015', source: '系统告警', symptom: '电机温度过高报警', statusLabel: '待领料', tagType: 'primary', owner: '李工', createTime: '2026-05-06 11:45' },
-  { id: 4, orderNo: 'WO-20260502-018', deviceNo: 'DJI-M350-0027', source: '飞手上报', symptom: '飞控异常，返航失败', statusLabel: '待放行', tagType: 'primary', owner: '张工', createTime: '2026-05-02 08:20' }
-])
+const activeTab = ref<'running' | 'completed' | 'closed'>('running')
+const queryParams = reactive({
+  keyword: '',
+  status: '' as WorkorderVO['status'] | '',
+  source: '' as WorkorderVO['source'] | '',
+  riskLevel: '' as WorkorderVO['riskLevel'] | ''
+})
+
+const workorderList = ref<WorkorderVO[]>([])
+
+const baseQuery = computed<WorkorderListQuery>(() => ({
+  keyword: queryParams.keyword || undefined,
+  status: queryParams.status || undefined,
+  source: queryParams.source || undefined,
+  riskLevel: queryParams.riskLevel || undefined
+}))
+
+const tabCounts = computed(() => {
+  const filtered = YianWorkorderApi.getList(baseQuery.value)
+  return {
+    running: filtered.filter((item) => !['completed', 'closed'].includes(item.status)).length,
+    completed: filtered.filter((item) => item.status === 'completed').length,
+    closed: filtered.filter((item) => item.status === 'closed').length
+  }
+})
+
+const loadData = () => {
+  workorderList.value = YianWorkorderApi.getList({
+    ...baseQuery.value,
+    viewTab: activeTab.value
+  })
+}
+
+const getCurrentNodeActionLabel = (row: WorkorderVO) => {
+  const actionMap: Partial<Record<WorkorderVO['status'], string>> = {
+    pending: '去受理',
+    diagnosing: '去初诊',
+    picking: '去领料',
+    repairing: '去维修',
+    inspecting: '去复检',
+    releasing: '去放行'
+  }
+  return actionMap[row.status] || ''
+}
+
+const handleCurrentNodeAction = (row: WorkorderVO) => {
+  if (row.status === 'releasing') {
+    router.push(`/workorder/release?orderId=${row.id}`)
+    return
+  }
+  router.push(`/workorder/detail/${row.id}`)
+}
+
+const resetQuery = () => {
+  queryParams.keyword = ''
+  queryParams.status = ''
+  queryParams.source = ''
+  queryParams.riskLevel = ''
+  activeTab.value = 'running'
+  loadData()
+}
+
+const syncQueryFromRoute = () => {
+  const deviceCode = route.query.deviceCode
+  queryParams.keyword = typeof deviceCode === 'string' ? deviceCode : ''
+}
+
+watch(activeTab, () => {
+  loadData()
+})
+
+watch(
+  () => route.query.deviceCode,
+  () => {
+    syncQueryFromRoute()
+    loadData()
+  }
+)
+
+onMounted(() => {
+  syncQueryFromRoute()
+  loadData()
+})
 </script>
+
+<style lang="scss" scoped>
+.text-secondary {
+  color: var(--el-text-color-secondary);
+}
+
+.text-danger {
+  color: var(--el-color-danger);
+}
+</style>

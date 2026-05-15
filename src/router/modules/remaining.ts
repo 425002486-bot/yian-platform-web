@@ -55,7 +55,9 @@ const remainingRouter: AppRouteRecordRaw[] = [
     component: Layout,
     redirect: '/index',
     name: 'Home',
-    meta: {},
+    meta: {
+      hidden: true
+    },
     children: [
       {
         path: 'index',
@@ -113,6 +115,32 @@ const remainingRouter: AppRouteRecordRaw[] = [
     },
     children: [
       {
+        path: 'battery/detail/:id',
+        component: () => import('@/views/yian/asset/battery/detail.vue'),
+        name: 'AssetBatteryDetail',
+        meta: {
+          noCache: true,
+          hidden: true,
+          canTo: true,
+          icon: 'ep:cellphone',
+          title: '电池详情',
+          activeMenu: '/asset/battery'
+        }
+      },
+      {
+        path: 'device/detail/:id',
+        component: () => import('@/views/yian/asset/device/detail.vue'),
+        name: 'AssetDeviceDetail',
+        meta: {
+          noCache: true,
+          hidden: true,
+          canTo: true,
+          icon: 'ep:monitor',
+          title: '设备详情',
+          activeMenu: '/asset/device'
+        }
+      },
+      {
         path: 'device/detail/:id/docs',
         component: () => import('@/views/yian/asset/device/docs.vue'),
         name: 'AssetDeviceDocs',
@@ -136,6 +164,42 @@ const remainingRouter: AppRouteRecordRaw[] = [
           icon: 'ep:histogram',
           title: '设备履历',
           activeMenu: '/asset/device'
+        }
+      },
+      {
+        path: 'device/detail/:id/inspection',
+        component: () => import('@/views/yian/asset/device/inspection.vue'),
+        name: 'AssetDeviceInspection',
+        meta: {
+          noCache: true,
+          hidden: true,
+          canTo: true,
+          icon: 'ep:checked',
+          title: '设备巡检',
+          activeMenu: '/asset/device'
+        }
+      }
+    ]
+  },
+  {
+    path: '/workorder',
+    component: Layout,
+    name: 'WorkorderRouter',
+    meta: {
+      hidden: true
+    },
+    children: [
+      {
+        path: 'detail/:id',
+        component: () => import('@/views/yian/workorder/detail/index.vue'),
+        name: 'YianWorkorderDetail',
+        meta: {
+          noCache: true,
+          hidden: true,
+          canTo: true,
+          icon: 'ep:tickets',
+          title: '工单详情',
+          activeMenu: '/workorder/list'
         }
       }
     ]

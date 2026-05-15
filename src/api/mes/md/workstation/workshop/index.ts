@@ -1,51 +1,72 @@
 import request from '@/config/axios'
+import { LocalDemoMesApi, isLocalMesDemoEnabled } from '@/api/mes/localDemo'
 
-// MES 车间 VO
 export interface MdWorkshopVO {
-  id: number // 车间编号
-  code: string // 车间编码
-  name: string // 车间名称
-  area: number // 面积
-  chargeUserId: number // 负责人用户编号
-  chargeUserName: string // 负责人名称
-  status: number // 状态
-  remark: string // 备注
+  id: number
+  code: string
+  name: string
+  area: number
+  chargeUserId: number
+  chargeUserName: string
+  status: number
+  remark: string
 }
 
-// MES 车间 API
+const withLocalWorkshopFallback = async <T>(fallback: () => T, remote: () => Promise<T>) => {
+  try {
+    return await remote()
+  } catch (error) {
+    if (isLocalMesDemoEnabled()) {
+      return fallback()
+    }
+    throw error
+  }
+}
+
 export const MdWorkshopApi = {
-  // 查询车间分页
   getWorkshopPage: async (params: any) => {
-    return await request.get({ url: `/mes/md-workshop/page`, params })
+    return await withLocalWorkshopFallback(
+      () => LocalDemoMesApi.getWorkshopPage(params),
+      () => request.get({ url: '/mes/md-workshop/page', params })
+    )
   },
 
-  // 查询车间精简列表
   getWorkshopSimpleList: async () => {
-    return await request.get({ url: `/mes/md-workshop/simple-list` })
+    return await withLocalWorkshopFallback(
+      () => LocalDemoMesApi.listWorkshops(),
+      () => request.get({ url: '/mes/md-workshop/simple-list' })
+    )
   },
 
-  // 查询车间详情
   getWorkshop: async (id: number) => {
-    return await request.get({ url: `/mes/md-workshop/get?id=` + id })
+    return await withLocalWorkshopFallback(
+      () => LocalDemoMesApi.getWorkshop(id),
+      () => request.get({ url: '/mes/md-workshop/get?id=' + id })
+    )
   },
 
-  // 新增车间
   createWorkshop: async (data: MdWorkshopVO) => {
-    return await request.post({ url: `/mes/md-workshop/create`, data })
+    return await withLocalWorkshopFallback(
+      () => LocalDemoMesApi.createWorkshop(data),
+      () => request.post({ url: '/mes/md-workshop/create', data })
+    )
   },
 
-  // 修改车间
   updateWorkshop: async (data: MdWorkshopVO) => {
-    return await request.put({ url: `/mes/md-workshop/update`, data })
+    return await withLocalWorkshopFallback(
+      () => LocalDemoMesApi.updateWorkshop(data),
+      () => request.put({ url: '/mes/md-workshop/update', data })
+    )
   },
 
-  // 删除车间
   deleteWorkshop: async (id: number) => {
-    return await request.delete({ url: `/mes/md-workshop/delete?id=` + id })
+    return await withLocalWorkshopFallback(
+      () => LocalDemoMesApi.deleteWorkshop(id),
+      () => request.delete({ url: '/mes/md-workshop/delete?id=' + id })
+    )
   },
 
-  // 导出车间 Excel
   exportWorkshop: async (params: any) => {
-    return await request.download({ url: `/mes/md-workshop/export-excel`, params })
+    return await request.download({ url: '/mes/md-workshop/export-excel', params })
   }
 }
