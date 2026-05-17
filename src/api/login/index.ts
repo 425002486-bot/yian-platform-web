@@ -201,7 +201,7 @@ const buildMockMenus = () => [
     parentId: 0,
     children: [
       {
-        name: '审计日志',
+        name: '操作日志',
         path: 'log',
         component: 'yian/audit/log/index',
         componentName: 'YianAuditLog',

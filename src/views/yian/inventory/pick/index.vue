@@ -1,44 +1,85 @@
 <template>
   <ContentWrap>
-    <el-form :inline="true" class="mb-16px">
-      <el-form-item label="工单编号">
-        <el-input placeholder="工单编号" clearable class="!w-180px" />
+    <el-form :inline="true" :model="queryParams" class="mb-16px" @submit.prevent="handleQuery">
+      <el-form-item label="单据编号">
+        <el-input v-model="queryParams.issueCode" placeholder="领料单号/退料单号" clearable class="!w-180px" />
       </el-form-item>
       <el-form-item label="类型">
-        <el-select placeholder="全部" clearable class="!w-120px">
+        <el-select v-model="queryParams.actionType" placeholder="全部" clearable class="!w-120px">
           <el-option label="领料" value="pick" />
           <el-option label="退料" value="return" />
         </el-select>
       </el-form-item>
       <el-form-item>
-        <el-button type="primary">查询</el-button>
+        <el-button type="primary" @click="handleQuery">查询</el-button>
+        <el-button @click="handleReset">重置</el-button>
       </el-form-item>
     </el-form>
 
-    <el-table :data="records" stripe>
-      <el-table-column label="记录编号" prop="recordNo" width="160" />
-      <el-table-column label="工单编号" prop="orderNo" width="160" />
-      <el-table-column label="备件名称" prop="partName" width="160" />
-      <el-table-column label="料号" prop="partNo" width="120" />
-      <el-table-column label="类型" prop="type" width="80">
+    <el-table v-loading="loading" :data="records" stripe>
+      <el-table-column label="操作时间" prop="createTime" width="160">
         <template #default="{ row }">
-          <el-tag :type="row.type === '领料' ? 'primary' : 'success'" size="small">{{ row.type }}</el-tag>
+          {{ formatDate(row.createTime) }}
         </template>
       </el-table-column>
-      <el-table-column label="数量" prop="qty" width="80" />
-      <el-table-column label="操作人" prop="operator" width="100" />
-      <el-table-column label="操作时间" prop="time" width="160" />
+      <el-table-column label="单据编号" prop="issueCode" width="160" />
+      <el-table-column label="备件名称" prop="itemName" width="160" />
+      <el-table-column label="料号" prop="itemCode" width="130" />
+      <el-table-column label="动作" prop="actionType" width="80">
+        <template #default="{ row }">
+          <el-tag :type="row.actionType === '领料' ? 'danger' : 'success'" size="small">
+            {{ row.actionType }}
+          </el-tag>
+        </template>
+      </el-table-column>
+      <el-table-column label="数量" prop="quantity" width="80" />
+      <el-table-column label="操作人" prop="operatorName" width="100" />
+      <el-table-column label="结果" prop="resultStatus" width="100">
+        <template #default="{ row }">
+          <el-tag :type="row.resultStatus === '已出库' ? 'info' : 'success'" size="small">
+            {{ row.resultStatus }}
+          </el-tag>
+        </template>
+      </el-table-column>
     </el-table>
   </ContentWrap>
 </template>
 
 <script lang="ts" setup>
 import { ContentWrap } from '@/components/ContentWrap'
+import { getPickReturnRecords, type PickReturnRecordVO } from '@/api/yian/inventory'
+import { formatDate } from '@/utils/formatTime'
+
 defineOptions({ name: 'InventoryPick' })
 
-const records = ref([
-  { recordNo: 'PK-0502-001', orderNo: 'WO-20260502-018', partName: '标准桨叶套装', partNo: 'SP-BLD-001', type: '领料', qty: 1, operator: '张工', time: '2026-05-02 11:08' },
-  { recordNo: 'PK-0502-002', orderNo: 'WO-20260502-018', partName: '减震球', partNo: 'SP-DMP-003', type: '领料', qty: 4, operator: '张工', time: '2026-05-02 11:08' },
-  { recordNo: 'RT-0502-001', orderNo: 'WO-20260502-018', partName: '减震球', partNo: 'SP-DMP-003', type: '退料', qty: 1, operator: '张工', time: '2026-05-02 12:35' }
-])
+const loading = ref(false)
+const records = ref<PickReturnRecordVO[]>([])
+
+const queryParams = reactive({
+  issueCode: undefined as string | undefined,
+  actionType: undefined as string | undefined
+})
+
+const getList = async () => {
+  loading.value = true
+  try {
+    records.value = await getPickReturnRecords(queryParams)
+  } finally {
+    loading.value = false
+  }
+}
+
+const handleQuery = () => {
+  getList()
+}
+
+const handleReset = () => {
+  queryParams.issueCode = undefined
+  queryParams.actionType = undefined
+  getList()
+}
+
+onMounted(() => {
+  getList()
+})
 </script>

@@ -182,6 +182,52 @@ const remainingRouter: AppRouteRecordRaw[] = [
     ]
   },
   {
+    path: '/audit',
+    component: Layout,
+    name: 'AuditRouter',
+    meta: {
+      hidden: true
+    },
+    children: [
+      {
+        path: 'detail',
+        component: () => import('@/views/yian/audit/detail/index.vue'),
+        name: 'YianAuditDetail',
+        meta: {
+          noCache: true,
+          hidden: true,
+          canTo: true,
+          icon: 'ep:document',
+          title: '日志详情',
+          activeMenu: '/audit/log'
+        }
+      }
+    ]
+  },
+  {
+    path: '/inventory',
+    component: Layout,
+    name: 'InventoryRouter',
+    meta: {
+      hidden: true
+    },
+    children: [
+      {
+        path: 'stock/detail',
+        component: () => import('@/views/yian/inventory/stock/detail.vue'),
+        name: 'InventoryStockDetail',
+        meta: {
+          noCache: true,
+          hidden: true,
+          canTo: true,
+          icon: 'ep:box',
+          title: '库存详情',
+          activeMenu: '/inventory/stock'
+        }
+      }
+    ]
+  },
+  {
     path: '/workorder',
     component: Layout,
     name: 'WorkorderRouter',

@@ -1,19 +1,19 @@
 <template>
   <ContentWrap>
-    <el-form :inline="true" class="mb-16px">
+    <el-form :inline="true" :model="queryParams" class="mb-16px" @submit.prevent="handleQuery">
       <el-form-item label="搜索">
-        <el-input placeholder="备件名称 / 料号" clearable class="!w-200px" />
+        <el-input v-model="queryParams.keyword" placeholder="备件名称 / 料号" clearable class="!w-200px" />
       </el-form-item>
       <el-form-item label="库存状态">
-        <el-select placeholder="全部" clearable class="!w-120px">
+        <el-select v-model="stockStatus" placeholder="全部" clearable class="!w-120px">
           <el-option label="正常" value="normal" />
           <el-option label="低库存" value="low" />
           <el-option label="缺货" value="empty" />
         </el-select>
       </el-form-item>
       <el-form-item>
-        <el-button type="primary">查询</el-button>
-        <el-button>重置</el-button>
+        <el-button type="primary" @click="handleQuery">查询</el-button>
+        <el-button @click="handleReset">重置</el-button>
       </el-form-item>
     </el-form>
 
@@ -22,35 +22,110 @@
       <el-button @click="$router.push('/inventory/import')">批量导入</el-button>
     </div>
 
-    <el-table :data="stockList" stripe>
-      <el-table-column label="料号" prop="partNo" width="140" />
-      <el-table-column label="备件名称" prop="name" width="180" />
-      <el-table-column label="分类" prop="category" width="100" />
-      <el-table-column label="适配机型" prop="models" width="140" />
-      <el-table-column label="当前库存" prop="stock" width="100">
+    <el-table v-loading="loading" :data="filteredList" stripe>
+      <el-table-column label="料号" prop="itemCode" width="140" />
+      <el-table-column label="备件名称" prop="itemName" width="180" />
+      <el-table-column label="分类" prop="itemTypeName" width="100" />
+      <el-table-column label="规格型号" prop="specification" width="140" />
+      <el-table-column label="当前库存" prop="quantity" width="100">
         <template #default="{ row }">
-          <span :class="row.stock <= row.safetyStock ? 'text-red-500 font-bold' : ''">{{ row.stock }}</span>
+          <span :class="row.minStock && row.quantity <= row.minStock ? 'text-red-500 font-bold' : ''">
+            {{ row.quantity }}
+          </span>
         </template>
       </el-table-column>
-      <el-table-column label="安全库存" prop="safetyStock" width="100" />
-      <el-table-column label="供应商" prop="supplier" min-width="140" />
+      <el-table-column label="安全库存" prop="minStock" width="100">
+        <template #default="{ row }">
+          {{ row.minStock ?? '-' }}
+        </template>
+      </el-table-column>
+      <el-table-column label="仓库" prop="warehouseName" width="120" />
+      <el-table-column label="供应商" prop="vendorName" min-width="140">
+        <template #default="{ row }">
+          {{ row.vendorName ?? '-' }}
+        </template>
+      </el-table-column>
       <el-table-column label="操作" width="120" fixed="right">
-        <template #default>
-          <el-button link type="primary">详情</el-button>
+        <template #default="{ row }">
+          <el-button link type="primary" @click="handleDetail(row.id)">详情</el-button>
         </template>
       </el-table-column>
     </el-table>
+
+    <!-- 分页 -->
+    <el-pagination
+      v-if="total > 0"
+      v-model:current-page="queryParams.pageNo"
+      v-model:page-size="queryParams.pageSize"
+      :total="total"
+      :page-sizes="[10, 20, 50]"
+      layout="total, sizes, prev, pager, next"
+      class="mt-16px justify-end"
+      @size-change="getList"
+      @current-change="getList"
+    />
   </ContentWrap>
 </template>
 
 <script lang="ts" setup>
 import { ContentWrap } from '@/components/ContentWrap'
+import { getMaterialStockPage, type MaterialStockVO } from '@/api/yian/inventory'
+
 defineOptions({ name: 'InventoryStock' })
 
-const stockList = ref([
-  { partNo: 'SP-BLD-001', name: '标准桨叶套装', category: '桨叶', models: 'M350 RTK', stock: 4, safetyStock: 10, supplier: 'DJI官方' },
-  { partNo: 'SP-MTR-002', name: '电机总成', category: '动力', models: 'M300/M350', stock: 6, safetyStock: 4, supplier: 'DJI官方' },
-  { partNo: 'SP-DMP-003', name: '减震球', category: '结构', models: '通用', stock: 22, safetyStock: 20, supplier: '第三方' },
-  { partNo: 'SP-GPS-004', name: 'GPS模块', category: '导航', models: 'M350 RTK', stock: 2, safetyStock: 3, supplier: 'DJI官方' }
-])
+const { push } = useRouter()
+
+const loading = ref(false)
+const stockList = ref<MaterialStockVO[]>([])
+const total = ref(0)
+const stockStatus = ref<string>()
+
+const queryParams = reactive({
+  pageNo: 1,
+  pageSize: 20,
+  keyword: undefined as string | undefined,
+  virtualFilter: 'exclude' as string | undefined
+})
+
+// 前端按库存状态过滤（因为状态是根据 quantity 和 minStock 计算的）
+const filteredList = computed(() => {
+  if (!stockStatus.value) return stockList.value
+  return stockList.value.filter((row) => {
+    if (stockStatus.value === 'empty') return row.quantity <= 0
+    if (stockStatus.value === 'low') return row.minStock && row.quantity > 0 && row.quantity <= row.minStock
+    if (stockStatus.value === 'normal') return !row.minStock || row.quantity > row.minStock
+    return true
+  })
+})
+
+const getList = async () => {
+  loading.value = true
+  try {
+    const data = await getMaterialStockPage(queryParams)
+    stockList.value = data.list
+    total.value = data.total
+  } finally {
+    loading.value = false
+  }
+}
+
+const handleQuery = () => {
+  queryParams.pageNo = 1
+  getList()
+}
+
+const handleReset = () => {
+  queryParams.keyword = undefined
+  stockStatus.value = undefined
+  queryParams.pageNo = 1
+  getList()
+}
+
+const handleDetail = (id: number) => {
+  push({ path: '/inventory/stock/detail', query: { id } })
+}
+
+onMounted(() => {
+  getList()
+})
 </script>

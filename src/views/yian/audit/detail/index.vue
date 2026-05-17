@@ -1,19 +1,22 @@
 <template>
-  <ContentWrap>
+  <ContentWrap v-loading="loading">
     <el-page-header @back="$router.push('/audit/log')" title="返回审计日志" content="日志详情" />
 
     <el-descriptions :column="2" border class="mt-20px" title="操作上下文">
-      <el-descriptions-item label="操作时间">2026-05-02 09:26:14</el-descriptions-item>
-      <el-descriptions-item label="操作人">李站长</el-descriptions-item>
-      <el-descriptions-item label="操作对象">工单</el-descriptions-item>
-      <el-descriptions-item label="对象标识">WO-20260502-018</el-descriptions-item>
-      <el-descriptions-item label="来源页面">工单受理</el-descriptions-item>
-      <el-descriptions-item label="IP地址">192.168.1.100</el-descriptions-item>
-      <el-descriptions-item label="操作内容" :span="2">受理工单，设备标记停飞</el-descriptions-item>
+      <el-descriptions-item label="操作时间">{{ formatDate(logDetail.createTime) }}</el-descriptions-item>
+      <el-descriptions-item label="操作人">{{ logDetail.userName }}</el-descriptions-item>
+      <el-descriptions-item label="操作对象">{{ logDetail.objectType }}</el-descriptions-item>
+      <el-descriptions-item label="对象标识">{{ logDetail.bizId }}</el-descriptions-item>
+      <el-descriptions-item label="来源页面">{{ logDetail.sourcePage }}</el-descriptions-item>
+      <el-descriptions-item label="IP地址">{{ logDetail.userIp }}</el-descriptions-item>
+      <el-descriptions-item label="操作内容" :span="2">{{ logDetail.action }}</el-descriptions-item>
     </el-descriptions>
 
     <el-card class="mt-20px" header="变更前后对比">
-      <div class="text-gray-400 py-20px text-center">变更前后 JSON Diff（待开发）</div>
+      <div v-if="logDetail.extra" class="py-10px">
+        <pre class="text-sm">{{ logDetail.extra }}</pre>
+      </div>
+      <div v-else class="text-gray-400 py-20px text-center">暂无变更记录</div>
     </el-card>
 
     <el-card class="mt-20px" header="责任链">
@@ -24,5 +27,27 @@
 
 <script lang="ts" setup>
 import { ContentWrap } from '@/components/ContentWrap'
+import { getAuditLog, type AuditLogVO } from '@/api/yian/audit'
+import { formatDate } from '@/utils/formatTime'
+
 defineOptions({ name: 'AuditLogDetail' })
+
+const { currentRoute } = useRouter()
+const loading = ref(false)
+const logDetail = ref<Partial<AuditLogVO>>({})
+
+const getDetail = async () => {
+  const id = currentRoute.value.query.id as string
+  if (!id) return
+  loading.value = true
+  try {
+    logDetail.value = await getAuditLog(Number(id))
+  } finally {
+    loading.value = false
+  }
+}
+
+onMounted(() => {
+  getDetail()
+})
 </script>
