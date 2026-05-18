@@ -5,35 +5,48 @@
       type="info"
       :closable="false"
       class="mb-16px"
-      description="以下为系统预定义的业务角色及权限矩阵。MVP 阶段角色不可自定义，如需调整请联系管理员。"
+      description="以下为系统预定义的业务角色及权限矩阵。MVP 阶段角色不可自定义，人员角色在「人员管理」中分配。"
     />
 
-    <el-table :data="roleList" stripe border>
-      <el-table-column label="角色名称" prop="name" width="130" fixed="left" />
-      <el-table-column label="说明" prop="description" min-width="200" />
+    <!-- 角色卡片概览 -->
+    <div class="grid grid-cols-3 gap-12px mb-20px">
+      <el-card v-for="role in roleList" :key="role.code" shadow="hover" class="role-card">
+        <div class="flex justify-between items-center mb-8px">
+          <span class="font-bold text-base">{{ role.name }}</span>
+          <el-tag size="small">{{ role.userCount }} 人</el-tag>
+        </div>
+        <div class="text-gray-500 text-sm">{{ role.description }}</div>
+      </el-card>
+    </div>
+
+    <!-- 权限矩阵表格 -->
+    <h3 class="mb-12px">权限矩阵</h3>
+    <el-table v-loading="loading" :data="roleList" stripe border>
+      <el-table-column label="角色" prop="name" width="130" fixed="left" />
+      <el-table-column label="人数" prop="userCount" width="70" align="center" />
       <el-table-column label="设备台账" width="90" align="center">
-        <template #default="{ row }"><PermTag :level="row.perms.asset" /></template>
+        <template #default="{ row }"><PermTag :level="row.perms?.asset" /></template>
       </el-table-column>
       <el-table-column label="工单受理" width="90" align="center">
-        <template #default="{ row }"><PermTag :level="row.perms.intake" /></template>
+        <template #default="{ row }"><PermTag :level="row.perms?.intake" /></template>
       </el-table-column>
       <el-table-column label="初诊维修" width="90" align="center">
-        <template #default="{ row }"><PermTag :level="row.perms.repair" /></template>
+        <template #default="{ row }"><PermTag :level="row.perms?.repair" /></template>
       </el-table-column>
       <el-table-column label="备件领料" width="90" align="center">
-        <template #default="{ row }"><PermTag :level="row.perms.parts" /></template>
+        <template #default="{ row }"><PermTag :level="row.perms?.parts" /></template>
       </el-table-column>
       <el-table-column label="复检" width="80" align="center">
-        <template #default="{ row }"><PermTag :level="row.perms.inspect" /></template>
+        <template #default="{ row }"><PermTag :level="row.perms?.inspect" /></template>
       </el-table-column>
       <el-table-column label="放行审核" width="90" align="center">
-        <template #default="{ row }"><PermTag :level="row.perms.release" /></template>
+        <template #default="{ row }"><PermTag :level="row.perms?.release" /></template>
       </el-table-column>
       <el-table-column label="审计日志" width="90" align="center">
-        <template #default="{ row }"><PermTag :level="row.perms.audit" /></template>
+        <template #default="{ row }"><PermTag :level="row.perms?.audit" /></template>
       </el-table-column>
       <el-table-column label="基础配置" width="90" align="center">
-        <template #default="{ row }"><PermTag :level="row.perms.config" /></template>
+        <template #default="{ row }"><PermTag :level="row.perms?.config" /></template>
       </el-table-column>
     </el-table>
 
@@ -47,10 +60,10 @@
 
 <script lang="ts" setup>
 import { ContentWrap } from '@/components/ContentWrap'
+import { getRoleSummary } from '@/api/yian/config/personnel'
 
 defineOptions({ name: 'ConfigRole' })
 
-// 权限标签组件
 const PermTag = defineComponent({
   props: { level: { type: String, default: 'none' } },
   setup(props) {
@@ -66,30 +79,25 @@ const PermTag = defineComponent({
   }
 })
 
-const roleList = ref([
-  {
-    name: '站点负责人', description: '查看设备与工单，派工调度，推动审批节点',
-    perms: { asset: 'view', intake: 'exec', repair: 'view', parts: 'view', inspect: 'view', release: 'view', audit: 'view', config: 'exec' }
-  },
-  {
-    name: '机务人员', description: '执行受理、初诊、领料、维修等一线作业',
-    perms: { asset: 'view', intake: 'exec', repair: 'exec', parts: 'exec', inspect: 'view', release: 'view', audit: 'view', config: 'none' }
-  },
-  {
-    name: '复检人员', description: '确认或驳回复检结果',
-    perms: { asset: 'view', intake: 'view', repair: 'view', parts: 'view', inspect: 'exec', release: 'view', audit: 'view', config: 'none' }
-  },
-  {
-    name: '放行审核人', description: '完成放行审核，形成放行结论',
-    perms: { asset: 'view', intake: 'view', repair: 'view', parts: 'view', inspect: 'view', release: 'exec', audit: 'view', config: 'none' }
-  },
-  {
-    name: '备件管理员', description: '库存管理、入库登记、领退料处理',
-    perms: { asset: 'view', intake: 'view', repair: 'view', parts: 'exec', inspect: 'view', release: 'view', audit: 'view', config: 'none' }
-  },
-  {
-    name: '审计人员', description: '查看日志、履历和责任链，完整追溯关键操作',
-    perms: { asset: 'view', intake: 'view', repair: 'view', parts: 'view', inspect: 'view', release: 'view', audit: 'exec', config: 'none' }
+const loading = ref(false)
+const roleList = ref<any[]>([])
+
+const loadData = async () => {
+  loading.value = true
+  try {
+    roleList.value = await getRoleSummary()
+  } finally {
+    loading.value = false
   }
-])
+}
+
+onMounted(() => {
+  loadData()
+})
 </script>
+
+<style scoped>
+.role-card:hover {
+  border-color: var(--el-color-primary);
+}
+</style>

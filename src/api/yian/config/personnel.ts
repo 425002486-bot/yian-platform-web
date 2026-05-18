@@ -38,3 +38,8 @@ export const deletePersonnel = (id: number) => {
 export const getBizRoles = () => {
   return request.get({ url: '/mes/config/personnel/biz-roles' })
 }
+
+// 角色概览（含人数和权限矩阵）
+export const getRoleSummary = () => {
+  return request.get({ url: '/mes/config/personnel/role-summary' })
+}
