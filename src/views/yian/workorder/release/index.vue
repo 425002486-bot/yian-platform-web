@@ -1,5 +1,6 @@
 <template>
   <ContentWrap>
+    <div class="yian-prototype-page yian-workorder-release-page">
     <el-page-header @back="router.push('/workorder/list')" title="返回工单列表" content="放行审核" />
 
     <el-form :inline="true" class="mt-20px mb-16px">
@@ -270,6 +271,7 @@
         </el-descriptions>
       </el-card>
     </template>
+    </div>
   </ContentWrap>
 </template>
 

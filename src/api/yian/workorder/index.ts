@@ -39,6 +39,13 @@ export interface WorkorderTimelineItem {
   at: string
 }
 
+export interface WorkorderAttachmentItem {
+  name: string
+  type: 'image' | 'log'
+  size: number
+  mimeType: string
+}
+
 export interface WorkorderStageRecordAcceptance {
   assignee: string
   priority: WorkorderPriority
@@ -100,6 +107,8 @@ interface WorkorderEntity {
   symptom: string
   description?: string
   reporterPhone?: string
+  imageAttachments?: WorkorderAttachmentItem[]
+  logAttachments?: WorkorderAttachmentItem[]
   owner: string
   creator: string
   createTime: string
@@ -150,6 +159,8 @@ export interface WorkorderCreateReqVO {
   symptom: string
   description?: string
   reporterPhone?: string
+  imageAttachments?: WorkorderAttachmentItem[]
+  logAttachments?: WorkorderAttachmentItem[]
   creator: string
 }
 
@@ -163,6 +174,12 @@ export interface WorkorderSummaryVO {
   releasing: number
   completed: number
   overdue: number
+}
+
+export interface WorkorderAttachmentAppendPayload {
+  type: WorkorderAttachmentItem['type']
+  files: WorkorderAttachmentItem[]
+  operator: string
 }
 
 export interface WorkorderBoardColumnVO {
@@ -598,6 +615,8 @@ export const YianWorkorderApi = {
       symptom: data.symptom,
       description: data.description,
       reporterPhone: data.reporterPhone,
+      imageAttachments: data.imageAttachments,
+      logAttachments: data.logAttachments,
       owner: '待分派',
       creator: data.creator,
       createTime: now(),
@@ -610,6 +629,27 @@ export const YianWorkorderApi = {
     orders.unshift(order)
     saveOrders(orders)
     return toVO(order)
+  },
+
+  appendAttachments(id: number, payload: WorkorderAttachmentAppendPayload) {
+    return mutateOrder(id, (draft) => {
+      const uploadedAt = now()
+      if (payload.type === 'image') {
+        draft.imageAttachments = [...(draft.imageAttachments || []), ...payload.files]
+      } else {
+        draft.logAttachments = [...(draft.logAttachments || []), ...payload.files]
+      }
+      const label = payload.type === 'image' ? '现场图片' : '日志附件'
+      draft.timeline.push(
+        createTimeline(
+          draft.status,
+          `补充${label}`,
+          `${payload.operator} 新增 ${payload.files.length} 份${label}`,
+          payload.operator,
+          uploadedAt
+        )
+      )
+    })
   },
 
   submitAcceptance(

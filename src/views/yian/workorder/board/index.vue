@@ -174,25 +174,31 @@ onMounted(() => {
 
 .summary-card {
   min-height: 120px;
+  font-size: 14px;
+  color: var(--el-text-color-regular);
 }
 
 .summary-card__label,
 .text-secondary,
 .empty-block {
   color: var(--el-text-color-secondary);
+  font-size: 14px;
+  line-height: 22px;
 }
 
 .summary-card__value {
-  margin-top: 12px;
-  font-size: 30px;
-  font-weight: 700;
-  line-height: 1;
+  margin-top: 8px;
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 28px;
+  color: var(--el-text-color-primary);
 }
 
 .summary-card__desc {
-  margin-top: 12px;
+  margin-top: 8px;
   color: var(--el-text-color-secondary);
-  line-height: 1.5;
+  font-size: 14px;
+  line-height: 22px;
 }
 
 .board-grid {
@@ -204,11 +210,15 @@ onMounted(() => {
 
 .board-stage {
   min-height: 420px;
+  font-size: 14px;
+  color: var(--el-text-color-regular);
 }
 
 .board-card {
   margin-bottom: 8px;
   padding: 12px;
+  font-size: 14px;
+  line-height: 22px;
   background: var(--el-fill-color-lighter);
   border-radius: 12px;
   cursor: pointer;
@@ -228,14 +238,14 @@ onMounted(() => {
 }
 
 .board-card__foot {
-  margin-top: 10px;
+  margin-top: 8px;
   color: var(--el-text-color-secondary);
-  font-size: 12px;
+  font-size: 14px;
+  line-height: 22px;
 }
 
 .empty-block {
   padding: 20px 0;
   text-align: center;
-  font-size: 12px;
 }
 </style>

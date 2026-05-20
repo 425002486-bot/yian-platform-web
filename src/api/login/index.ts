@@ -1,4 +1,4 @@
-import request from '@/config/axios'
+﻿import request from '@/config/axios'
 import type { RegisterVO, UserLoginVO } from './types'
 
 export interface SmsCodeVO {
@@ -62,7 +62,17 @@ const buildMockMenus = () => [
         parentId: 2
       },
       {
-        name: '资产导入',
+        name: '\u8d44\u4ea7\u5de1\u68c0',
+        path: 'inspection',
+        component: 'yian/asset/inspection/index',
+        componentName: 'AssetInspection',
+        icon: 'ep:checked',
+        visible: true,
+        keepAlive: true,
+        parentId: 2
+      },
+      {
+        name: '\u8d44\u4ea7\u5bfc\u5165',
         path: 'import',
         component: 'yian/asset/import/index',
         componentName: 'AssetImport',
@@ -178,7 +188,7 @@ const buildMockMenus = () => [
         parentId: 4
       },
       {
-        name: '库存导入',
+        name: '????',
         path: 'import',
         component: 'yian/inventory/import/index',
         componentName: 'YianInventoryImport',
@@ -424,3 +434,6 @@ export const reqCheck = (data: any) => {
 export const smsResetPassword = (data: any) => {
   return request.post({ url: '/system/auth/reset-password', data })
 }
+
+
+

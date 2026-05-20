@@ -11,7 +11,11 @@
       <el-row :gutter="16">
         <el-col :span="8">
           <el-form-item label="设备编号" prop="code">
-            <el-input v-model="formData.code" placeholder="请输入设备编号" :disabled="formType !== 'create'">
+            <el-input
+              v-model="formData.code"
+              placeholder="请输入设备编号"
+              :disabled="formType !== 'create'"
+            >
               <template v-if="formType === 'create'" #append>
                 <el-button @click="generateCode">生成</el-button>
               </template>
@@ -33,7 +37,10 @@
       <el-row :gutter="16">
         <el-col :span="8">
           <el-form-item label="设备类型" prop="machineryTypeId">
-            <DvMachineryTypeSelect v-model="formData.machineryTypeId" />
+            <DvMachineryTypeSelect
+              v-model="formData.machineryTypeId"
+              @change="handleMachineryTypeChange"
+            />
           </el-form-item>
         </el-col>
         <el-col :span="8">
@@ -80,7 +87,7 @@
         </el-col>
       </el-row>
 
-      <el-row :gutter="16">
+      <el-row v-if="showStandardBatteryField" :gutter="16">
         <el-col :span="24">
           <el-form-item label="标配电池 SN" prop="standardBatteryCodes">
             <el-select
@@ -153,6 +160,7 @@
 
 <script setup lang="ts">
 import { DvMachineryApi, DvMachineryVO } from '@/api/mes/dv/machinery'
+import type { DvMachineryTypeVO } from '@/api/mes/dv/machinery/type'
 import { MdWorkshopApi, type MdWorkshopVO } from '@/api/mes/md/workstation/workshop'
 import {
   ASSET_DEVICE_ENABLE_STATUS_OPTIONS,
@@ -167,6 +175,8 @@ import { MesAutoCodeRuleCode } from '@/views/mes/utils/constants'
 import { AutoCodeRecordApi } from '@/api/mes/md/autocode/record'
 
 defineOptions({ name: 'MachineryForm' })
+
+const AIRCRAFT_MACHINERY_TYPE_NAME = '无人机整机'
 
 type MachineryFormData = {
   id?: number
@@ -229,6 +239,11 @@ const createDefaultFormData = (): MachineryFormData => ({
 })
 
 const formData = ref<MachineryFormData>(createDefaultFormData())
+const showStandardBatteryField = computed(
+  () => formData.value.machineryTypeName === AIRCRAFT_MACHINERY_TYPE_NAME
+)
+
+const normalizeIdentityValue = (value?: string) => String(value || '').trim().toUpperCase()
 
 const formRules = reactive({
   code: [{ required: true, message: '设备编号不能为空', trigger: 'blur' }],
@@ -252,6 +267,10 @@ const syncWorkshopMeta = () => {
   }
 }
 
+const handleMachineryTypeChange = (item?: DvMachineryTypeVO) => {
+  formData.value.machineryTypeName = item?.name || ''
+}
+
 watch(
   () => formData.value.workshopId,
   () => {
@@ -259,8 +278,60 @@ watch(
   }
 )
 
+watch(
+  () => showStandardBatteryField.value,
+  (visible) => {
+    if (!visible && formData.value.standardBatteryCodes.length > 0) {
+      formData.value.standardBatteryCodes = []
+    }
+  }
+)
+
 const generateCode = async () => {
-  formData.value.code = await AutoCodeRecordApi.generateAutoCode(MesAutoCodeRuleCode.DV_MACHINERY_CODE)
+  formData.value.code = await AutoCodeRecordApi.generateAutoCode(
+    MesAutoCodeRuleCode.DV_MACHINERY_CODE
+  )
+}
+
+const fetchAllMachineryList = async () => {
+  const pageSize = 200
+  let pageNo = 1
+  let total = 0
+  const allList: DvMachineryVO[] = []
+
+  do {
+    const data = await DvMachineryApi.getMachineryPage({ pageNo, pageSize })
+    const list = data.list || []
+    total = Number(data.total || list.length || 0)
+    allList.push(...list)
+    if (list.length < pageSize) break
+    pageNo += 1
+  } while (allList.length < total)
+
+  return allList
+}
+
+const assertUniqueIdentity = async () => {
+  const currentId = formData.value.id
+  const nextCode = normalizeIdentityValue(formData.value.code)
+  const nextSerialNumber = normalizeIdentityValue(formData.value.serialNumber)
+  const list = await fetchAllMachineryList()
+
+  const duplicatedCode = list.find(
+    (item) => item.id !== currentId && normalizeIdentityValue(item.code) === nextCode
+  )
+  if (duplicatedCode) {
+    throw new Error(`设备编号已存在：${formData.value.code}`)
+  }
+
+  const duplicatedSerialNumber = list.find((item) => {
+    if (item.id === currentId) return false
+    const assetRecord = resolveAssetDeviceMasterRecord(item)
+    return normalizeIdentityValue(assetRecord.serialNumber) === nextSerialNumber
+  })
+  if (duplicatedSerialNumber) {
+    throw new Error(`设备 SN 已存在：${formData.value.serialNumber}`)
+  }
 }
 
 const open = async (type: 'create' | 'update' | 'detail', id?: number) => {
@@ -305,6 +376,11 @@ const submitForm = async () => {
   await formRef.value.validate()
   formLoading.value = true
   try {
+    await assertUniqueIdentity()
+    const standardBatteryCodes = showStandardBatteryField.value
+      ? [...formData.value.standardBatteryCodes]
+      : []
+
     const payload: DvMachineryVO = {
       id: formData.value.id as number,
       code: formData.value.code || '',
@@ -339,11 +415,13 @@ const submitForm = async () => {
       siteName: payload.workshopName || '待补录',
       ownerName: formData.value.ownerName,
       enableStatus: formData.value.enableStatus,
-      standardBatteryCodes: [...formData.value.standardBatteryCodes]
+      standardBatteryCodes
     })
 
     dialogVisible.value = false
     emit('success')
+  } catch (error: any) {
+    message.error(error?.message || '设备保存失败')
   } finally {
     formLoading.value = false
   }

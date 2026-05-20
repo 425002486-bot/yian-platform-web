@@ -1,7 +1,19 @@
+﻿import dayjs from 'dayjs'
 import type { DvMachineryVO } from '@/api/mes/dv/machinery'
 import type { AssetBatteryVO as BackendAssetBatteryVO } from '@/api/yian/asset/backend'
+import { useCache } from '@/hooks/web/useCache'
 
 export type AssetRiskTone = 'success' | 'warning' | 'danger' | 'info'
+
+export interface AssetInspectionAttachmentVO {
+  id: string
+  fileName: string
+  category: '图片' | '日志' | '附件'
+  summary: string
+  uploadedAt: string
+  uploadedBy: string
+  sizeLabel?: string
+}
 
 export interface AssetDocumentVO {
   id: string
@@ -49,7 +61,10 @@ export interface AssetBatteryInspectionVO {
   source: string
   conclusion: string
   summary: string
+  notes?: string
   evidence: string
+  attachments: AssetInspectionAttachmentVO[]
+  parsedMetrics?: AssetBatteryParsedMetrics
 }
 
 export interface AssetBatteryAttachmentVO {
@@ -70,10 +85,23 @@ export interface AssetBatteryCorrectionVO {
   tone: AssetRiskTone
 }
 
+export interface AssetBatteryParsedMetrics {
+  sourceFileName?: string
+  sourceType?: string
+  serialNumber?: string
+  linkedDeviceCode?: string
+  soh?: number
+  cycleCount?: number
+  maxVoltageDiff?: number
+  maxTemperature?: number
+}
+
 export interface AssetBatteryProfileVO {
   healthScore?: number
   healthScoreLabel: string
   healthScoreTone: AssetRiskTone
+  dataConfidenceLabel?: string
+  dataConfidenceTone?: AssetRiskTone
   currentOwnerName: string
   standardDeviceCode?: string
   standardDeviceName?: string
@@ -81,15 +109,34 @@ export interface AssetBatteryProfileVO {
   actualMountedDeviceName?: string
   inspectionStatus: string
   inspectionDueText: string
+  latestDiffSummary?: string
   scoreBreakdown: Array<{
     label: string
     value: string
+    tone?: AssetRiskTone
+  }>
+  pendingData?: Array<{
+    label: string
+    status: string
+    detail: string
     tone?: AssetRiskTone
   }>
   inspectionRecords: AssetBatteryInspectionVO[]
   attachments: AssetBatteryAttachmentVO[]
   correctionHints: AssetBatteryCorrectionVO[]
   remarks: string[]
+}
+
+export interface AssetBatteryInspectionPayload {
+  batteryCode: string
+  inspectedAt: string
+  inspector: string
+  source: string
+  conclusion: 'pass' | 'observe' | 'grounded'
+  summary: string
+  notes: string
+  attachments: AssetInspectionAttachmentVO[]
+  parsedMetrics?: AssetBatteryParsedMetrics | null
 }
 
 export interface AssetDeviceProfileVO {
@@ -190,212 +237,8 @@ const batteryAssets: AssetBatteryVO[] = [
   }
 ]
 
-const batteryProfiles: Record<string, AssetBatteryProfileVO> = {
-  'YA-BT-00891': {
-    healthScore: 85,
-    healthScoreLabel: '85 分',
-    healthScoreTone: 'warning',
-    currentOwnerName: '周启明',
-    standardDeviceCode: 'UAV-MVP-001',
-    standardDeviceName: 'Inspection UAV 01',
-    actualMountedDeviceCode: 'UAV-MVP-001',
-    actualMountedDeviceName: 'Inspection UAV 01',
-    inspectionStatus: '待巡检',
-    inspectionDueText: '距上次巡检 13 天，已超过 7 天例行巡检要求',
-    scoreBreakdown: [
-      { label: 'SOH', value: '87%，基础健康正常' },
-      { label: '循环次数', value: '186 次，进入重点观察区间', tone: 'warning' },
-      { label: '压差与外观', value: '压差 0.02V，外观巡检无异常' },
-      { label: '数据完整性', value: '日志与检测报告齐全，可解释来源明确' }
-    ],
-    inspectionRecords: [
-      {
-        id: 'inspection-891-1',
-        inspectedAt: '2026-05-10 08:40',
-        inspector: '周启明',
-        source: '检测报告',
-        conclusion: '继续观察',
-        summary: '循环次数偏高但压差稳定，允许短航时任务。',
-        evidence: '附件：TB65_20260510_report.pdf'
-      },
-      {
-        id: 'inspection-891-2',
-        inspectedAt: '2026-04-28 09:15',
-        inspector: '华东运维中心',
-        source: '人工巡检',
-        conclusion: '通过',
-        summary: '外观、触点、鼓包检查通过。',
-        evidence: '附件：battery_check_20260428.jpg'
-      }
-    ],
-    attachments: [
-      {
-        id: 'attachment-891-1',
-        fileName: 'flight-log-20260512.csv',
-        category: '飞行日志',
-        summary: '识别到 1 次跨主机挂载记录，需人工确认是否临时调拨。',
-        uploadedAt: '2026-05-12 18:22',
-        uploadedBy: '系统解析'
-      },
-      {
-        id: 'attachment-891-2',
-        fileName: 'TB65_20260510_report.pdf',
-        category: '检测报告',
-        summary: 'SOH、循环次数与压差字段已成功解析。',
-        uploadedAt: '2026-05-10 08:40',
-        uploadedBy: '周启明'
-      }
-    ],
-    correctionHints: [
-      {
-        id: 'correction-891-1',
-        detectedAt: '2026-05-12 18:22',
-        summary: '日志识别到非备案挂载',
-        detail: '系统在飞行日志中识别到该电池曾挂载至 UAV-MVP-003，但主档备案仍为 UAV-MVP-001。',
-        actionHint: '系统仅提示差异，请人工核实后进入主档编辑页维护标配关系。',
-        tone: 'warning'
-      }
-    ],
-    remarks: ['建议优先安排本周复检，不建议直接执行长航时任务。']
-  },
-  'YA-BT-00912': {
-    healthScore: 92,
-    healthScoreLabel: '92 分',
-    healthScoreTone: 'success',
-    currentOwnerName: '周启明',
-    standardDeviceCode: 'UAV-MVP-001',
-    standardDeviceName: 'Inspection UAV 01',
-    actualMountedDeviceCode: 'UAV-MVP-001',
-    actualMountedDeviceName: 'Inspection UAV 01',
-    inspectionStatus: '状态正常',
-    inspectionDueText: '最近一次 BMS 回传完整，暂未触发额外巡检提醒',
-    scoreBreakdown: [
-      { label: 'SOH', value: '93%，状态良好' },
-      { label: '循环次数', value: '72 次，处于安全区间' },
-      { label: '来源可信度', value: 'BMS 自动回传，可追溯性高' }
-    ],
-    inspectionRecords: [
-      {
-        id: 'inspection-912-1',
-        inspectedAt: '2026-05-08 14:20',
-        inspector: '系统同步',
-        source: 'BMS',
-        conclusion: '通过',
-        summary: 'SOH 与循环次数正常，可执行常规任务。',
-        evidence: 'BMS 自动同步记录'
-      }
-    ],
-    attachments: [
-      {
-        id: 'attachment-912-1',
-        fileName: 'bms-sync-20260508.json',
-        category: 'BMS 数据',
-        summary: '同步了 SOH、循环次数和最近一次检测时间。',
-        uploadedAt: '2026-05-08 14:20',
-        uploadedBy: '系统同步'
-      }
-    ],
-    correctionHints: [],
-    remarks: ['当前无纠偏提示，可作为常规标配电池继续使用。']
-  },
-  'YA-BT-01003': {
-    healthScore: 79,
-    healthScoreLabel: '79 分',
-    healthScoreTone: 'warning',
-    currentOwnerName: '罗家豪',
-    standardDeviceCode: 'UAV-MVP-002',
-    standardDeviceName: 'Inspection UAV 02',
-    actualMountedDeviceCode: 'UAV-MVP-002',
-    actualMountedDeviceName: 'Inspection UAV 02',
-    inspectionStatus: '观察中',
-    inspectionDueText: '已命中寿命预警规则，建议 48 小时内完成复检',
-    scoreBreakdown: [
-      { label: 'SOH', value: '78%，接近预警阈值', tone: 'warning' },
-      { label: '循环次数', value: '244 次，持续累积偏高', tone: 'warning' },
-      { label: '外观巡检', value: '最近一次记录无鼓包，但建议复检插头触点' }
-    ],
-    inspectionRecords: [
-      {
-        id: 'inspection-1003-1',
-        inspectedAt: '2026-05-09 17:30',
-        inspector: '苏州工业园站',
-        source: '检测工装',
-        conclusion: '观察中',
-        summary: '检测结果提示寿命预警，建议限制长航时任务。',
-        evidence: '附件：TB65_20260509_fixture.pdf'
-      }
-    ],
-    attachments: [
-      {
-        id: 'attachment-1003-1',
-        fileName: 'TB65_20260509_fixture.pdf',
-        category: '检测报告',
-        summary: '已解析出 SOH 78%、循环 244 次。',
-        uploadedAt: '2026-05-09 17:30',
-        uploadedBy: '苏州工业园站'
-      },
-      {
-        id: 'attachment-1003-2',
-        fileName: 'flight-log-20260511.csv',
-        category: '飞行日志',
-        summary: '日志识别到挂载主机与备案一致。',
-        uploadedAt: '2026-05-11 12:05',
-        uploadedBy: '系统解析'
-      }
-    ],
-    correctionHints: [],
-    remarks: ['建议仅执行白天短航时任务，并在下一次放行前复检。']
-  },
-  'YA-BT-01007': {
-    healthScore: 58,
-    healthScoreLabel: '58 分',
-    healthScoreTone: 'danger',
-    currentOwnerName: '罗家豪',
-    standardDeviceCode: 'UAV-MVP-002',
-    standardDeviceName: 'Inspection UAV 02',
-    actualMountedDeviceCode: 'UAV-MVP-002',
-    actualMountedDeviceName: 'Inspection UAV 02',
-    inspectionStatus: '停飞禁用',
-    inspectionDueText: '已命中低寿命强规则，需完成更换后再恢复挂载',
-    scoreBreakdown: [
-      { label: 'SOH', value: '61%，接近禁飞阈值', tone: 'danger' },
-      { label: '循环次数', value: '398 次，达到高风险区间', tone: 'danger' },
-      { label: '检测结论', value: '人工导入检测报告已命中停飞规则', tone: 'danger' }
-    ],
-    inspectionRecords: [
-      {
-        id: 'inspection-1007-1',
-        inspectedAt: '2026-05-06 11:10',
-        inspector: '罗家豪',
-        source: '人工导入',
-        conclusion: '禁止放行',
-        summary: '寿命不足，必须完成更换后再绑定主机。',
-        evidence: '附件：TB65_20260506_manual.pdf'
-      }
-    ],
-    attachments: [
-      {
-        id: 'attachment-1007-1',
-        fileName: 'TB65_20260506_manual.pdf',
-        category: '检测报告',
-        summary: '人工导入检测结果，命中低寿命强规则。',
-        uploadedAt: '2026-05-06 11:10',
-        uploadedBy: '罗家豪'
-      }
-    ],
-    correctionHints: [
-      {
-        id: 'correction-1007-1',
-        detectedAt: '2026-05-06 11:20',
-        summary: '主机仍绑定停飞电池',
-        detail: '日志与主档均显示该电池仍处于 UAV-MVP-002 的标配关系中，需人工确认是否已更换。',
-        actionHint: '如已更换，请在主档编辑页解绑旧电池并维护新电池关系。',
-        tone: 'danger'
-      }
-    ],
-    remarks: ['该电池不应继续参与放行，建议尽快完成更换和主档调整。']
-  }
-}
+const BATTERY_PROFILE_STORAGE_KEY = 'yian_asset_battery_profile_v1'
+const { wsCache } = useCache()
 
 const deviceProfiles: Record<string, AssetDeviceProfileVO> = {
   'UAV-MVP-001': {
@@ -613,11 +456,44 @@ const buildDefaultProfile = (device?: Partial<DvMachineryVO> | null): AssetDevic
 const cloneDocuments = (documents: AssetDocumentVO[]) => documents.map((item) => ({ ...item }))
 const cloneHistory = (history: AssetHistoryEventVO[]) => history.map((item) => ({ ...item }))
 const cloneBatteryInspection = (records: AssetBatteryInspectionVO[]) =>
-  records.map((item) => ({ ...item }))
+  records.map((item) => ({
+    ...item,
+    parsedMetrics: item.parsedMetrics ? { ...item.parsedMetrics } : undefined,
+    attachments: item.attachments?.map((file) => ({ ...file })) || []
+  }))
 const cloneBatteryAttachments = (attachments: AssetBatteryAttachmentVO[]) =>
   attachments.map((item) => ({ ...item }))
 const cloneBatteryCorrections = (corrections: AssetBatteryCorrectionVO[]) =>
   corrections.map((item) => ({ ...item }))
+
+type BatteryProfileStoreEntry = {
+  inspectionRecords?: AssetBatteryInspectionVO[]
+  archiveAttachments?: AssetBatteryAttachmentVO[]
+  correctionHints?: AssetBatteryCorrectionVO[]
+  remarks?: string[]
+  latestMetrics?: AssetBatteryParsedMetrics | null
+}
+
+const BATTERY_ARCHIVE_STORAGE_KEY = 'yian_asset_battery_archive_v1'
+
+const getBatteryProfileStore = (): Record<string, BatteryProfileStoreEntry> =>
+  ((wsCache.get(BATTERY_PROFILE_STORAGE_KEY) as Record<string, BatteryProfileStoreEntry> | undefined) || {})
+
+const setBatteryProfileStore = (value: Record<string, BatteryProfileStoreEntry>) => {
+  wsCache.set(BATTERY_PROFILE_STORAGE_KEY, value)
+}
+
+const getBatteryArchiveStore = (): BackendAssetBatteryVO[] =>
+  ((wsCache.get(BATTERY_ARCHIVE_STORAGE_KEY) as BackendAssetBatteryVO[] | undefined) || []).map((item) => ({
+    ...item
+  }))
+
+const setBatteryArchiveStore = (value: BackendAssetBatteryVO[]) => {
+  wsCache.set(
+    BATTERY_ARCHIVE_STORAGE_KEY,
+    value.map((item) => ({ ...item }))
+  )
+}
 
 export const resolveAssetDeviceProfile = (
   device?: Partial<DvMachineryVO> | null
@@ -645,52 +521,430 @@ type AssetBatteryLike = Partial<BackendAssetBatteryVO> &
     siteName?: string
   }
 
-const buildDefaultBatteryProfile = (battery?: AssetBatteryLike | null): AssetBatteryProfileVO => {
-  const healthScore = typeof battery?.soh === 'number' ? battery.soh : undefined
-  const healthTone: AssetRiskTone =
-    battery?.healthStatus === 'danger'
-      ? 'danger'
-      : battery?.healthStatus === 'warning'
-        ? 'warning'
-        : 'success'
+const isNumber = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isFinite(value)
+
+const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value))
+
+const buildCycleScore = (cycleCount?: number) => {
+  if (!isNumber(cycleCount)) return undefined
+  if (cycleCount <= 100) return 100
+  if (cycleCount <= 200) return 90
+  if (cycleCount <= 300) return 75
+  if (cycleCount <= 400) return 55
+  return 35
+}
+
+const buildVoltageDiffScore = (diff?: number) => {
+  if (!isNumber(diff)) return undefined
+  if (diff <= 0.03) return 100
+  if (diff <= 0.05) return 85
+  if (diff <= 0.08) return 65
+  return 40
+}
+
+const getInspectionScore = (inspection?: AssetBatteryInspectionVO) => {
+  if (!inspection) return undefined
+  if (inspection.conclusion === '异常') return 45
+  if (inspection.conclusion === '观察') return 75
+  return 100
+}
+
+const resolveHealthToneByScore = (score?: number): AssetRiskTone => {
+  if (!isNumber(score)) return 'info'
+  if (score >= 90) return 'success'
+  if (score >= 60) return 'warning'
+  return 'danger'
+}
+
+const buildHealthSummary = (
+  soh: number | undefined,
+  cycleCount: number | undefined,
+  maxVoltageDiff: number | undefined,
+  latestInspection?: AssetBatteryInspectionVO
+) => {
+  const weighted: Array<{
+    score: number
+    weight: number
+    label: string
+    value: string
+    tone?: AssetRiskTone
+  }> = []
+
+  if (isNumber(soh)) {
+    weighted.push({
+      score: clamp(soh, 0, 100),
+      weight: 0.45,
+      label: 'SOH',
+      value: `${soh}%`
+    })
+  }
+
+  const cycleScore = buildCycleScore(cycleCount)
+  if (isNumber(cycleScore) && isNumber(cycleCount)) {
+    weighted.push({
+      score: cycleScore,
+      weight: 0.25,
+      label: '循环次数',
+      value: `${cycleCount} 次`,
+      tone: cycleScore < 60 ? 'danger' : cycleScore < 80 ? 'warning' : 'success'
+    })
+  }
+
+  const diffScore = buildVoltageDiffScore(maxVoltageDiff)
+  if (isNumber(diffScore) && isNumber(maxVoltageDiff)) {
+    weighted.push({
+      score: diffScore,
+      weight: 0.2,
+      label: '最大压差',
+      value: `${maxVoltageDiff.toFixed(2)}V`,
+      tone: diffScore < 60 ? 'danger' : diffScore < 80 ? 'warning' : 'success'
+    })
+  }
+
+  const inspectionScore = getInspectionScore(latestInspection)
+  if (isNumber(inspectionScore) && latestInspection) {
+    weighted.push({
+      score: inspectionScore,
+      weight: 0.1,
+      label: '最近巡检',
+      value: latestInspection.conclusion,
+      tone: inspectionScore < 60 ? 'danger' : inspectionScore < 80 ? 'warning' : 'success'
+    })
+  }
+
+  if (!weighted.length) {
+    return {
+      healthScore: undefined,
+      healthScoreLabel: '-',
+      healthScoreTone: 'info' as AssetRiskTone,
+      dataConfidenceLabel: '-',
+      dataConfidenceTone: 'info' as AssetRiskTone,
+      scoreBreakdown: [] as AssetBatteryProfileVO['scoreBreakdown']
+    }
+  }
+
+  const totalWeight = weighted.reduce((sum, item) => sum + item.weight, 0)
+  const healthScore = Math.round(
+    weighted.reduce((sum, item) => sum + item.score * item.weight, 0) / totalWeight
+  )
+  const confidence = Math.round(totalWeight * 100)
+  const healthScoreTone = resolveHealthToneByScore(healthScore)
+  const dataConfidenceTone: AssetRiskTone =
+    confidence >= 85 ? 'success' : confidence >= 60 ? 'warning' : 'info'
 
   return {
     healthScore,
-    healthScoreLabel: typeof healthScore === 'number' ? `${healthScore} 分` : 'N/A',
-    healthScoreTone: healthTone,
-    currentOwnerName: '待补录',
-    standardDeviceCode: battery?.linkedDeviceCode,
-    standardDeviceName: battery?.linkedDeviceName,
-    actualMountedDeviceCode: battery?.linkedDeviceCode,
-    actualMountedDeviceName: battery?.linkedDeviceName,
-    inspectionStatus: battery?.healthLabel || '待补录',
-    inspectionDueText: '当前仅有基础电池台账信息，待补充巡检记录与日志附件。',
-    scoreBreakdown: [
-      {
-        label: '健康分口径',
-        value: '当前按基础 SOH 映射展示，待补充巡检与日志后更新。'
-      }
-    ],
-    inspectionRecords: [],
-    attachments: [],
-    correctionHints: [],
-    remarks: ['当前为基础电池档案，请补录巡检记录与日志附件。']
+    healthScoreLabel: `${healthScore} 分`,
+    healthScoreTone,
+    dataConfidenceLabel: `${confidence}%`,
+    dataConfidenceTone,
+    scoreBreakdown: weighted.map((item) => ({
+      label: item.label,
+      value: item.value,
+      tone: item.tone
+    }))
   }
 }
+
+const buildPendingData = (
+  battery: AssetBatteryLike | null | undefined,
+  inspectionRecords: AssetBatteryInspectionVO[],
+  attachments: AssetBatteryAttachmentVO[],
+  latestMetrics?: AssetBatteryParsedMetrics | null
+) => {
+  const pendingData: NonNullable<AssetBatteryProfileVO['pendingData']> = []
+
+  if (!inspectionRecords.length) {
+    pendingData.push({
+      label: '最近巡检',
+      status: '待补录',
+      detail: '当前还没有电池巡检记录，请先发起巡检。',
+      tone: 'warning'
+    })
+  }
+
+  if (!attachments.length) {
+    pendingData.push({
+      label: '附件与日志',
+      status: '待补录',
+      detail: '尚未上传检测日志或现场附件，无法补充健康依据。',
+      tone: 'info'
+    })
+  }
+
+  if (!isNumber(latestMetrics?.maxVoltageDiff)) {
+    pendingData.push({
+      label: '最大压差',
+      status: '待补录',
+      detail: '尚未从日志或检测文件中读取最大压差。',
+      tone: 'info'
+    })
+  }
+
+  if (!battery?.linkedDeviceCode) {
+    pendingData.push({
+      label: '关联主机',
+      status: '待补录',
+      detail: '当前未维护关联主机，后续日志校验无法比对挂载关系。',
+      tone: 'warning'
+    })
+  }
+
+  return pendingData
+}
+
+const buildCorrectionHints = (
+  battery: AssetBatteryLike | null | undefined,
+  latestMetrics?: AssetBatteryParsedMetrics | null
+) => {
+  const correctionHints: AssetBatteryCorrectionVO[] = []
+  if (!latestMetrics) return correctionHints
+
+  if (
+    latestMetrics.serialNumber &&
+    battery?.serialNumber &&
+    latestMetrics.serialNumber !== battery.serialNumber
+  ) {
+    correctionHints.push({
+      id: `battery-correction-sn-${battery?.batteryCode || Date.now()}`,
+      detectedAt: dayjs().format('YYYY-MM-DD HH:mm'),
+      summary: '日志识别的电池 SN 与主档不一致',
+      detail: `主档 SN：${battery.serialNumber}；日志识别：${latestMetrics.serialNumber}`,
+      actionHint: '请先核实电池 SN，确认后再更新主档或日志归属。',
+      tone: 'danger'
+    })
+  }
+
+  if (
+    latestMetrics.linkedDeviceCode &&
+    battery?.linkedDeviceCode &&
+    latestMetrics.linkedDeviceCode !== battery.linkedDeviceCode
+  ) {
+    correctionHints.push({
+      id: `battery-correction-device-${battery?.batteryCode || Date.now()}`,
+      detectedAt: dayjs().format('YYYY-MM-DD HH:mm'),
+      summary: '日志识别的挂载主机与当前关联主机不一致',
+      detail: `当前关联：${battery.linkedDeviceCode}；日志识别：${latestMetrics.linkedDeviceCode}`,
+      actionHint: '请核实是否为临时换挂，确认后再更新关联主机信息。',
+      tone: 'warning'
+    })
+  }
+
+  return correctionHints
+}
+
+const buildBatteryRemarks = (inspectionRecords: AssetBatteryInspectionVO[]) =>
+  inspectionRecords
+    .map((item) => String(item.notes || '').trim())
+    .filter(Boolean)
+    .filter((item, index, list) => list.indexOf(item) === index)
+
+const buildDefaultBatteryProfile = (battery?: AssetBatteryLike | null): AssetBatteryProfileVO => ({
+  healthScore: undefined,
+  healthScoreLabel: '-',
+  healthScoreTone: 'info',
+  dataConfidenceLabel: '-',
+  dataConfidenceTone: 'info',
+  currentOwnerName: '',
+  standardDeviceCode: battery?.linkedDeviceCode,
+  standardDeviceName: battery?.linkedDeviceName,
+  actualMountedDeviceCode: battery?.linkedDeviceCode,
+  actualMountedDeviceName: battery?.linkedDeviceName,
+  inspectionStatus: battery?.healthLabel || '-',
+  inspectionDueText: '',
+  latestDiffSummary: '-',
+  scoreBreakdown: [],
+  pendingData: [],
+  inspectionRecords: [],
+  attachments: [],
+  correctionHints: [],
+  remarks: []
+})
 
 export const resolveAssetBatteryProfile = (
   battery?: AssetBatteryLike | null
 ): AssetBatteryProfileVO => {
   const code = battery?.batteryCode || ''
-  const profile = batteryProfiles[code]
-  if (!profile) {
-    return buildDefaultBatteryProfile(battery)
-  }
+  const defaultProfile = buildDefaultBatteryProfile(battery)
+  const cached = getBatteryProfileStore()[code]
+  const inspectionRecords = cloneBatteryInspection(cached?.inspectionRecords || [])
+  const attachments = cloneBatteryAttachments(cached?.archiveAttachments || [])
+  const latestMetrics = cached?.latestMetrics || null
+  const latestInspection = inspectionRecords[0]
+  const derivedSoh = isNumber(latestMetrics?.soh) ? latestMetrics?.soh : battery?.soh
+  const derivedCycleCount = isNumber(latestMetrics?.cycleCount)
+    ? latestMetrics?.cycleCount
+    : battery?.cycleCount
+  const derivedDiff = latestMetrics?.maxVoltageDiff
+  const healthSummary = buildHealthSummary(
+    derivedSoh,
+    derivedCycleCount,
+    derivedDiff,
+    latestInspection
+  )
+  const correctionHints = cloneBatteryCorrections(
+    buildCorrectionHints(battery, latestMetrics)
+  )
+
   return {
-    ...profile,
-    inspectionRecords: cloneBatteryInspection(profile.inspectionRecords),
-    attachments: cloneBatteryAttachments(profile.attachments),
-    correctionHints: cloneBatteryCorrections(profile.correctionHints),
-    remarks: [...profile.remarks]
+    ...defaultProfile,
+    healthScore: healthSummary.healthScore,
+    healthScoreLabel: healthSummary.healthScoreLabel,
+    healthScoreTone: healthSummary.healthScoreTone,
+    dataConfidenceLabel: healthSummary.dataConfidenceLabel,
+    dataConfidenceTone: healthSummary.dataConfidenceTone,
+    latestDiffSummary: isNumber(derivedDiff)
+      ? `${derivedDiff.toFixed(2)}V / 来源：${latestMetrics?.sourceType || battery?.checkSource || '日志'}`
+      : '-',
+    scoreBreakdown: healthSummary.scoreBreakdown,
+    pendingData: buildPendingData(battery, inspectionRecords, attachments, latestMetrics),
+    inspectionRecords,
+    attachments,
+    correctionHints,
+    remarks: buildBatteryRemarks(inspectionRecords)
   }
 }
+
+const getBatteryConclusionLabel = (conclusion: AssetBatteryInspectionPayload['conclusion']) => {
+  if (conclusion === 'grounded') return '异常'
+  if (conclusion === 'observe') return '观察'
+  return '合格'
+}
+
+export const submitAssetBatteryInspection = (
+  batteryCode: string,
+  payload: AssetBatteryInspectionPayload
+) => {
+  const current = resolveAssetBatteryProfile({ batteryCode })
+  const inspectedAt = payload.inspectedAt || dayjs().format('YYYY-MM-DD HH:mm')
+  const conclusionLabel = getBatteryConclusionLabel(payload.conclusion)
+  const inspectionRecord: AssetBatteryInspectionVO = {
+    id: `battery-inspection-${batteryCode}-${Date.now()}`,
+    inspectedAt,
+    inspector: payload.inspector,
+    source: payload.source,
+    conclusion: conclusionLabel,
+    summary: payload.summary,
+    notes: payload.notes,
+    evidence:
+      payload.attachments.length
+        ? `${payload.attachments.length} 份附件 / ${payload.attachments
+            .map((item) => item.fileName)
+            .slice(0, 2)
+            .join('、')}`
+        : payload.notes || '',
+    attachments: payload.attachments.map((item) => ({ ...item, uploadedAt: item.uploadedAt || inspectedAt })),
+    parsedMetrics: payload.parsedMetrics ? { ...payload.parsedMetrics } : undefined
+  }
+
+  const store = getBatteryProfileStore()
+  store[batteryCode] = {
+    inspectionRecords: [inspectionRecord, ...current.inspectionRecords],
+    archiveAttachments: [...current.attachments],
+    remarks: payload.notes.trim()
+      ? [payload.notes.trim(), ...current.remarks.filter((item) => item !== payload.notes.trim())]
+      : current.remarks,
+    correctionHints:
+      payload.conclusion === 'grounded'
+        ? [
+            {
+              id: `battery-correction-${batteryCode}-${Date.now()}`,
+              detectedAt: inspectedAt,
+              summary: '巡检发现异常',
+              detail: payload.summary,
+              actionHint: '请结合附件与日志尽快复核，必要时安排维修或更换。',
+              tone: 'danger'
+            },
+            ...current.correctionHints
+          ]
+        : current.correctionHints,
+    latestMetrics: payload.parsedMetrics
+      ? {
+          ...payload.parsedMetrics,
+          sourceType: payload.source
+        }
+      : null
+  }
+  setBatteryProfileStore(store)
+
+  const archiveStore = getBatteryArchiveStore()
+  const archiveIndex = archiveStore.findIndex((item) => item.batteryCode === batteryCode)
+  if (archiveIndex >= 0) {
+    const target = { ...archiveStore[archiveIndex] }
+    if (isNumber(payload.parsedMetrics?.soh)) {
+      target.soh = clamp(payload.parsedMetrics.soh, 0, 100)
+    }
+    if (isNumber(payload.parsedMetrics?.cycleCount)) {
+      target.cycleCount = Math.max(0, payload.parsedMetrics.cycleCount)
+    }
+    target.lastCheckAt = inspectedAt
+    target.lastCheckTime = inspectedAt
+    target.checkSource = payload.source
+    archiveStore[archiveIndex] = target
+    setBatteryArchiveStore(archiveStore)
+  }
+
+  return resolveAssetBatteryProfile({
+    ...(archiveStore.find((item) => item.batteryCode === batteryCode) || {}),
+    batteryCode
+  })
+}
+
+const resolveBatteryAttachmentCategory = (fileName: string) => {
+  const lowerName = fileName.toLowerCase()
+  if (/\.(png|jpg|jpeg|gif|webp|bmp)$/i.test(lowerName)) return '现场图片'
+  if (/\.(log|txt|csv|json|zip|rar|7z)$/i.test(lowerName)) return '日志附件'
+  return '建档附件'
+}
+
+const buildBatteryAttachmentSummary = (category: string, uploadedBy: string) => {
+  if (category === '现场图片') return `现场补录 / 上传人：${uploadedBy}`
+  if (category === '日志附件') return `日志补录 / 上传人：${uploadedBy}`
+  return `建档补录 / 上传人：${uploadedBy}`
+}
+
+export const uploadAssetBatteryDocument = (
+  battery: AssetBatteryLike | null | undefined,
+  payload: {
+    fileName: string
+    uploadedBy: string
+    uploadedAt?: string
+  }
+) => {
+  const batteryCode = battery?.batteryCode || ''
+  if (!batteryCode) {
+    return resolveAssetBatteryProfile(battery)
+  }
+
+  const uploadedAt = payload.uploadedAt || dayjs().format('YYYY-MM-DD HH:mm')
+  const category = resolveBatteryAttachmentCategory(payload.fileName)
+  const attachment: AssetBatteryAttachmentVO = {
+    id: `battery-attachment-${batteryCode}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    fileName: payload.fileName,
+    category,
+    summary: buildBatteryAttachmentSummary(category, payload.uploadedBy),
+    uploadedAt,
+    uploadedBy: payload.uploadedBy
+  }
+
+  const store = getBatteryProfileStore()
+  const currentStore = store[batteryCode] || {}
+  const currentProfile = resolveAssetBatteryProfile(battery)
+
+  store[batteryCode] = {
+    inspectionRecords: currentStore.inspectionRecords || currentProfile.inspectionRecords,
+    archiveAttachments: [attachment, ...(currentStore.archiveAttachments || currentProfile.attachments)],
+    correctionHints: currentStore.correctionHints || currentProfile.correctionHints,
+    remarks: currentStore.remarks || currentProfile.remarks,
+    latestMetrics: currentStore.latestMetrics || latestMetricsToRecord(currentProfile.inspectionRecords)
+  }
+  setBatteryProfileStore(store)
+
+  return resolveAssetBatteryProfile(battery)
+}
+
+const latestMetricsToRecord = (inspectionRecords: AssetBatteryInspectionVO[]) =>
+  inspectionRecords.find((item) => item.parsedMetrics)?.parsedMetrics || null
+
+

@@ -25,6 +25,7 @@
             />
           </el-select>
         </el-form-item>
+
         <el-form-item label="报修来源" prop="source">
           <el-select v-model="form.source" placeholder="选择来源" class="!w-100%">
             <el-option
@@ -35,6 +36,7 @@
             />
           </el-select>
         </el-form-item>
+
         <el-form-item label="异常时间" prop="faultTime">
           <el-date-picker
             v-model="form.faultTime"
@@ -44,15 +46,19 @@
             class="!w-100%"
           />
         </el-form-item>
+
         <el-form-item label="联系电话" prop="reporterPhone">
           <el-input v-model="form.reporterPhone" placeholder="选填，补充提交人联系电话" />
         </el-form-item>
+
         <el-form-item label="任务场景" prop="taskScene">
           <el-input v-model="form.taskScene" placeholder="选填，例如：返航阶段 / 河道巡检阶段" />
         </el-form-item>
+
         <el-form-item label="异常现象" prop="symptom">
           <el-input v-model="form.symptom" placeholder="简要描述故障现象" />
         </el-form-item>
+
         <el-form-item label="现场描述" prop="description">
           <el-input
             v-model="form.description"
@@ -61,9 +67,43 @@
             placeholder="补充现场情况、风险提示、附件说明"
           />
         </el-form-item>
+
+        <el-form-item label="上传图片">
+          <el-upload
+            class="workorder-upload"
+            :auto-upload="false"
+            :multiple="true"
+            :limit="6"
+            :file-list="imageUploadList"
+            accept="image/*"
+            @change="handleImageChange"
+            @remove="handleImageRemove"
+          >
+            <el-button>上传图片</el-button>
+          </el-upload>
+          <div class="form-tip">支持上传故障现场图片，方便识别异常现象和位置。</div>
+        </el-form-item>
+
+        <el-form-item label="上传日志">
+          <el-upload
+            class="workorder-upload"
+            :auto-upload="false"
+            :multiple="true"
+            :limit="5"
+            :file-list="logUploadList"
+            accept=".log,.txt,.csv,.json,.zip,.rar,.7z"
+            @change="handleLogChange"
+            @remove="handleLogRemove"
+          >
+            <el-button>上传日志</el-button>
+          </el-upload>
+          <div class="form-tip">支持上传飞控日志、检测报告、压缩包等附件。</div>
+        </el-form-item>
+
         <el-form-item label="提交人" prop="creator">
           <el-input v-model="form.creator" disabled />
         </el-form-item>
+
         <el-form-item>
           <el-button type="primary" :loading="submitting" @click="handleSubmit">
             提交工单
@@ -76,7 +116,7 @@
 </template>
 
 <script lang="ts" setup>
-import type { FormInstance, FormRules } from 'element-plus'
+import type { FormInstance, FormRules, UploadFile, UploadFiles, UploadUserFile } from 'element-plus'
 import { ContentWrap } from '@/components/ContentWrap'
 import { DvMachineryApi, type DvMachineryVO } from '@/api/mes/dv/machinery'
 import { resolveAssetDeviceMasterRecord } from '@/api/yian/asset/deviceMaster'
@@ -84,6 +124,7 @@ import { useUserStoreWithOut } from '@/store/modules/user'
 import {
   WORKORDER_SOURCE_OPTIONS,
   YianWorkorderApi,
+  type WorkorderAttachmentItem,
   type WorkorderSource
 } from '@/api/yian/workorder'
 
@@ -101,6 +142,8 @@ const formRef = ref<FormInstance>()
 const submitting = ref(false)
 const deviceLoading = ref(false)
 const deviceOptions = ref<DeviceOption[]>([])
+const imageUploadList = ref<UploadUserFile[]>([])
+const logUploadList = ref<UploadUserFile[]>([])
 const currentOperatorName = computed(() => userStore.getUser.nickname || '当前账号')
 
 const form = reactive({
@@ -114,6 +157,8 @@ const form = reactive({
   taskScene: '',
   symptom: '',
   description: '',
+  imageAttachments: [] as WorkorderAttachmentItem[],
+  logAttachments: [] as WorkorderAttachmentItem[],
   creator: currentOperatorName.value
 })
 
@@ -122,7 +167,7 @@ const rules: FormRules = {
   source: [{ required: true, message: '请选择报修来源', trigger: 'change' }],
   faultTime: [{ required: true, message: '请选择异常时间', trigger: 'change' }],
   symptom: [{ required: true, message: '请填写异常现象', trigger: 'blur' }],
-  creator: [{ required: true, message: '请填写创建人', trigger: 'blur' }]
+  creator: [{ required: true, message: '请填写提交人', trigger: 'blur' }]
 }
 
 const fallbackDevices: DeviceOption[] = [
@@ -130,6 +175,26 @@ const fallbackDevices: DeviceOption[] = [
   { id: 1202, code: 'UAV-MVP-002', name: 'DJI M30T', siteName: '苏州工业园站' },
   { id: 1201, code: 'UAV-MVP-001', name: 'DJI M350 RTK', siteName: '杭州余杭站' }
 ]
+
+const toAttachmentMeta = (
+  file: UploadFile,
+  type: WorkorderAttachmentItem['type']
+): WorkorderAttachmentItem => ({
+  name: file.name,
+  type,
+  size: file.raw?.size ?? 0,
+  mimeType: file.raw?.type || ''
+})
+
+const toUploadUserFiles = (files: UploadFiles) =>
+  files.map((item) => ({
+    name: item.name,
+    url: item.url,
+    status: item.status
+  }))
+
+const syncAttachments = (files: UploadFiles, type: WorkorderAttachmentItem['type']) =>
+  files.map((item) => toAttachmentMeta(item, type))
 
 const loadDevices = async () => {
   deviceLoading.value = true
@@ -156,6 +221,26 @@ const handleDeviceChange = (deviceId?: number) => {
   form.siteName = target?.siteName || ''
 }
 
+const handleImageChange = (_file: UploadFile, files: UploadFiles) => {
+  imageUploadList.value = toUploadUserFiles(files)
+  form.imageAttachments = syncAttachments(files, 'image')
+}
+
+const handleLogChange = (_file: UploadFile, files: UploadFiles) => {
+  logUploadList.value = toUploadUserFiles(files)
+  form.logAttachments = syncAttachments(files, 'log')
+}
+
+const handleImageRemove = (_file: UploadFile, files: UploadFiles) => {
+  imageUploadList.value = toUploadUserFiles(files)
+  form.imageAttachments = syncAttachments(files, 'image')
+}
+
+const handleLogRemove = (_file: UploadFile, files: UploadFiles) => {
+  logUploadList.value = toUploadUserFiles(files)
+  form.logAttachments = syncAttachments(files, 'log')
+}
+
 const handleSubmit = async () => {
   const valid = await formRef.value?.validate().catch(() => false)
   if (!valid) {
@@ -175,6 +260,8 @@ const handleSubmit = async () => {
       taskScene: form.taskScene,
       symptom: form.symptom,
       description: form.description,
+      imageAttachments: form.imageAttachments,
+      logAttachments: form.logAttachments,
       creator: form.creator
     })
     message.success('工单已创建，并进入待受理')
@@ -192,3 +279,16 @@ onMounted(async () => {
   loadDevices()
 })
 </script>
+
+<style lang="scss" scoped>
+.workorder-upload {
+  width: 100%;
+}
+
+.form-tip {
+  margin-top: 8px;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--el-text-color-secondary);
+}
+</style>

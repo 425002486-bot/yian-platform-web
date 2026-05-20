@@ -1,360 +1,423 @@
 <template>
   <ContentWrap>
-    <el-page-header @back="router.push('/workorder/list')" title="返回工单列表" content="工单详情">
-      <template #extra>
-        <el-space wrap>
-          <el-tag effect="plain">{{ order?.siteName || '待补录站点' }}</el-tag>
-          <el-tag effect="plain">{{ order?.owner || '站点负责人' }}</el-tag>
-          <el-button type="primary" @click="router.push('/workorder/list')">进入工单中心</el-button>
-        </el-space>
-      </template>
-    </el-page-header>
+    <div class="yian-prototype-page yian-workorder-detail-page">
+      <el-page-header @back="router.push('/workorder/list')" title="返回工单列表" content="工单详情">
+        <template #extra>
+          <el-space wrap>
+            <el-tag effect="plain">{{ order?.siteName || '待补录站点' }}</el-tag>
+            <el-tag effect="plain">{{ order?.owner || '待分派负责人' }}</el-tag>
+            <el-button type="primary" @click="router.push('/workorder/list')">进入工单中心</el-button>
+          </el-space>
+        </template>
+      </el-page-header>
 
-    <el-empty v-if="!order" description="未找到对应工单" class="mt-20px" />
+      <el-empty v-if="!order" description="未找到对应工单" class="mt-20px" />
 
-    <template v-else>
-      <el-card class="mt-20px detail-card" shadow="never">
-        <div class="detail-card__head">
-          <div>
-            <div class="detail-card__title">工单 {{ order.orderNo }}</div>
-            <div class="detail-card__meta">
-              设备 {{ order.deviceCode }} / {{ order.siteName }} / {{ taskSceneText }} / {{ order.symptom }}
-            </div>
-          </div>
-          <div class="detail-card__tags">
-            <el-tag :type="order.tagType">{{ order.statusLabel }}</el-tag>
-            <el-tag :type="groundedTag.type">{{ groundedTag.label }}</el-tag>
-          </div>
-        </div>
-
-        <div class="info-grid">
-          <div class="info-field">
-            <strong>创建时间</strong>
-            <span>{{ order.createTime }}</span>
-          </div>
-          <div class="info-field">
-            <strong>工单来源</strong>
-            <span>{{ order.sourceLabel }}</span>
-          </div>
-          <div class="info-field">
-            <strong>提交人</strong>
-            <span>{{ reporterDisplay }}</span>
-          </div>
-          <div class="info-field">
-            <strong>任务场景</strong>
-            <span>{{ taskSceneText }}</span>
-          </div>
-          <div class="info-field">
-            <strong>当前责任人</strong>
-            <span>{{ order.owner || '待分派' }}</span>
-          </div>
-          <div class="info-field">
-            <strong>节点截止时间</strong>
-            <span :class="order.overdue ? 'text-danger' : ''">{{ order.slaDeadline }}</span>
-          </div>
-          <div class="info-field info-field--full">
-            <strong>故障现象</strong>
-            <span>{{ order.symptom }}</span>
-          </div>
-        </div>
-      </el-card>
-
-      <el-row :gutter="16" class="mt-20px">
-        <el-col :xs="24" :xl="14">
-          <el-card shadow="never">
-            <template #header>
-              <div class="section-header">
-                <span>{{ stageResult.title }}</span>
-                <el-tag v-if="stageResult.tagLabel" :type="stageResult.tagType">{{ stageResult.tagLabel }}</el-tag>
-              </div>
-            </template>
-            <div class="info-grid">
-              <div
-                v-for="field in stageResult.fields"
-                :key="`${stageResult.title}-${field.label}`"
-                class="info-field"
-                :class="{ 'info-field--full': field.full }"
-              >
-                <strong>{{ field.label }}</strong>
-                <span>{{ field.value }}</span>
+      <template v-else>
+        <el-card class="mt-20px detail-card" shadow="never">
+          <div class="detail-card__head">
+            <div>
+              <div class="detail-card__title">工单 {{ order.orderNo }}</div>
+              <div class="detail-card__meta">
+                设备 {{ order.deviceCode }} / {{ order.siteName }} / {{ taskSceneText }} / {{ order.symptom }}
               </div>
             </div>
-          </el-card>
-        </el-col>
+            <div class="detail-card__tags">
+              <el-tag :type="order.tagType">{{ order.statusLabel }}</el-tag>
+              <el-tag :type="groundedTag.type">{{ groundedTag.label }}</el-tag>
+            </div>
+          </div>
 
-        <el-col :xs="24" :xl="10">
-          <el-card shadow="never">
-            <template #header>
-              <div class="section-header">
-                <span>日志与附件</span>
-              </div>
-            </template>
-            <div class="evidence-list">
-              <div class="evidence-item">
+          <div class="info-grid">
+            <div class="info-field">
+              <strong>创建时间</strong>
+              <span>{{ order.createTime }}</span>
+            </div>
+            <div class="info-field">
+              <strong>工单来源</strong>
+              <span>{{ order.sourceLabel }}</span>
+            </div>
+            <div class="info-field">
+              <strong>提交人</strong>
+              <span>{{ reporterDisplay }}</span>
+            </div>
+            <div class="info-field">
+              <strong>任务场景</strong>
+              <span>{{ taskSceneText }}</span>
+            </div>
+            <div class="info-field">
+              <strong>当前负责人</strong>
+              <span>{{ order.owner || '待分派' }}</span>
+            </div>
+            <div class="info-field">
+              <strong>SLA 截止时间</strong>
+              <span :class="order.overdue ? 'text-danger' : ''">{{ order.slaDeadline }}</span>
+            </div>
+            <div class="info-field info-field--full">
+              <strong>异常现象</strong>
+              <span>{{ order.symptom }}</span>
+            </div>
+            <div class="info-field info-field--full">
+              <strong>现场描述</strong>
+              <span>{{ order.description || '待补录现场描述' }}</span>
+            </div>
+          </div>
+        </el-card>
+
+        <el-row :gutter="16" class="mt-20px">
+          <el-col :xs="24" :xl="14">
+            <el-card shadow="never">
+              <template #header>
                 <div class="section-header">
-                  <strong>飞行日志</strong>
-                  <el-tag type="success">{{ flightLogMeta.count }} 份</el-tag>
+                  <span>{{ stageResult.title }}</span>
+                  <el-tag v-if="stageResult.tagLabel" :type="stageResult.tagType">
+                    {{ stageResult.tagLabel }}
+                  </el-tag>
                 </div>
-                <p>{{ flightLogMeta.text }}</p>
+              </template>
+              <div class="info-grid">
+                <div
+                  v-for="field in stageResult.fields"
+                  :key="`${stageResult.title}-${field.label}`"
+                  class="info-field"
+                  :class="{ 'info-field--full': field.full }"
+                >
+                  <strong>{{ field.label }}</strong>
+                  <span>{{ field.value }}</span>
+                </div>
               </div>
-              <div class="evidence-item">
+            </el-card>
+          </el-col>
+
+          <el-col :xs="24" :xl="10">
+            <el-card shadow="never">
+              <template #header>
                 <div class="section-header">
-                  <strong>现场图片</strong>
-                  <el-tag type="info">{{ photoEvidenceMeta.count }} 份</el-tag>
+                  <span>日志与附件</span>
                 </div>
-                <p>{{ photoEvidenceMeta.text }}</p>
+              </template>
+              <div class="evidence-list">
+                <div class="evidence-item">
+                  <div class="section-header">
+                    <strong>飞行日志</strong>
+                    <el-tag type="success">{{ logAttachments.length }} 份</el-tag>
+                  </div>
+                  <p>{{ logSummaryText }}</p>
+                </div>
+                <div class="evidence-item">
+                  <div class="section-header">
+                    <strong>现场图片</strong>
+                    <el-tag type="info">{{ imageAttachments.length }} 份</el-tag>
+                  </div>
+                  <p>{{ imageSummaryText }}</p>
+                </div>
+                <div class="evidence-item">
+                  <div class="section-header">
+                    <strong>关联证据</strong>
+                  </div>
+                  <el-space wrap>
+                    <el-button @click="handleViewEvidence">查看证据</el-button>
+                    <el-button @click="handleImportImage">补录图片</el-button>
+                    <el-button @click="handleImportLog">导入日志</el-button>
+                  </el-space>
+                </div>
               </div>
-              <div class="evidence-item">
+            </el-card>
+          </el-col>
+        </el-row>
+
+        <el-row :gutter="16" class="mt-20px">
+          <el-col :xs="24" :xl="14">
+            <el-card header="工单时间轴" shadow="never">
+              <el-timeline>
+                <el-timeline-item
+                  v-for="item in timelineItems"
+                  :key="`${item.stage}-${item.at}-${item.title}`"
+                  :timestamp="item.at"
+                  placement="top"
+                >
+                  <div class="timeline-title">{{ item.title }}</div>
+                  <div class="timeline-text">{{ item.detail }}</div>
+                  <div class="timeline-text">{{ item.operator }}</div>
+                </el-timeline-item>
+              </el-timeline>
+            </el-card>
+          </el-col>
+
+          <el-col :xs="24" :xl="10">
+            <el-card shadow="never">
+              <template #header>
                 <div class="section-header">
-                  <strong>关联证据</strong>
+                  <span>当前动作</span>
                 </div>
+              </template>
+              <div class="action-panel">
+                <div class="action-panel__title">{{ currentAction.title }}</div>
+                <p class="action-panel__desc">{{ currentAction.description }}</p>
                 <el-space wrap>
-                  <el-button @click="handleViewEvidence">查看证据</el-button>
-                  <el-button @click="handleImportLog">导入日志</el-button>
+                  <el-button v-if="currentAction.primaryText" type="primary" @click="handlePrimaryAction">
+                    {{ currentAction.primaryText }}
+                  </el-button>
+                  <el-button
+                    v-if="order.status === 'releasing'"
+                    @click="router.push(`/workorder/release?orderId=${order.id}`)"
+                  >
+                    查看放行审核
+                  </el-button>
                 </el-space>
               </div>
-            </div>
-          </el-card>
-        </el-col>
-      </el-row>
+            </el-card>
+          </el-col>
+        </el-row>
 
-      <el-row :gutter="16" class="mt-20px">
-        <el-col :xs="24" :xl="14">
-          <el-card header="工单时间轴" shadow="never">
-            <el-timeline>
-              <el-timeline-item
-                v-for="item in timelineItems"
-                :key="`${item.stage}-${item.at}-${item.title}`"
-                :timestamp="item.at"
-                placement="top"
-              >
-                <div class="timeline-title">{{ item.title }}</div>
-                <div class="timeline-text">{{ item.detail }}</div>
-                <div class="timeline-text">{{ item.operator }}</div>
-              </el-timeline-item>
-            </el-timeline>
-          </el-card>
-        </el-col>
-
-        <el-col :xs="24" :xl="10">
+        <div v-if="showProcessingForm" id="workorder-processing-form" class="mt-20px">
           <el-card shadow="never">
             <template #header>
               <div class="section-header">
-                <span>当前动作</span>
+                <span>{{ processingFormTitle }}</span>
               </div>
             </template>
-            <div class="action-panel">
-              <div class="action-panel__title">{{ currentAction.title }}</div>
-              <p class="action-panel__desc">{{ currentAction.description }}</p>
-              <el-space wrap>
-                <el-button
-                  v-if="currentAction.primaryText"
-                  type="primary"
-                  @click="handlePrimaryAction"
-                >
-                  {{ currentAction.primaryText }}
-                </el-button>
-                <el-button
-                  v-if="order.status === 'releasing'"
-                  @click="router.push(`/workorder/release?orderId=${order.id}`)"
-                >
-                  查看放行审核
-                </el-button>
-              </el-space>
-            </div>
+
+            <el-form v-if="order.status === 'pending'" :model="acceptForm" label-width="110px">
+              <el-row :gutter="16">
+                <el-col :xs="24" :md="12">
+                  <el-form-item label="受理结论">
+                    <el-input model-value="受理并进入初始诊断" disabled />
+                  </el-form-item>
+                </el-col>
+                <el-col :xs="24" :md="12">
+                  <el-form-item label="停飞结论">
+                    <el-input model-value="立即停飞" disabled />
+                  </el-form-item>
+                </el-col>
+                <el-col :xs="24" :md="12">
+                  <el-form-item label="机务负责人">
+                    <el-input v-model="acceptForm.assignee" disabled />
+                  </el-form-item>
+                </el-col>
+                <el-col :xs="24" :md="12">
+                  <el-form-item label="SLA 截止">
+                    <el-input :model-value="order.slaDeadline" disabled />
+                  </el-form-item>
+                </el-col>
+                <el-col :xs="24">
+                  <el-form-item label="受理备注">
+                    <el-input v-model="acceptForm.remark" type="textarea" :rows="3" />
+                  </el-form-item>
+                </el-col>
+              </el-row>
+              <el-form-item class="mb-0">
+                <el-button type="primary" @click="submitAcceptance">提交受理</el-button>
+              </el-form-item>
+            </el-form>
+
+            <el-form v-else-if="order.status === 'diagnosing'" :model="diagnoseForm" label-width="110px">
+              <el-row :gutter="16">
+                <el-col :xs="24" :md="12">
+                  <el-form-item label="初诊人">
+                    <el-input v-model="diagnoseForm.engineer" disabled />
+                  </el-form-item>
+                </el-col>
+                <el-col :xs="24" :md="12">
+                  <el-form-item label="故障分类">
+                    <el-input v-model="diagnoseForm.faultCategory" placeholder="例如：飞控系统" />
+                  </el-form-item>
+                </el-col>
+                <el-col :xs="24" :md="12">
+                  <el-form-item label="风险等级">
+                    <el-select v-model="diagnoseForm.riskLevel" class="!w-100%">
+                      <el-option label="高风险" value="high" />
+                      <el-option label="中风险" value="medium" />
+                      <el-option label="低风险" value="low" />
+                    </el-select>
+                  </el-form-item>
+                </el-col>
+                <el-col :xs="24" :md="12">
+                  <el-form-item label="建议备件">
+                    <el-input v-model="diagnoseForm.suggestedPartsText" placeholder="多个备件用逗号分隔" />
+                  </el-form-item>
+                </el-col>
+                <el-col :xs="24">
+                  <el-form-item label="诊断结论">
+                    <el-input v-model="diagnoseForm.conclusion" type="textarea" :rows="3" />
+                  </el-form-item>
+                </el-col>
+              </el-row>
+              <el-form-item class="mb-0">
+                <el-button type="primary" @click="submitDiagnosis">提交初诊</el-button>
+              </el-form-item>
+            </el-form>
+
+            <el-form v-else-if="order.status === 'picking'" :model="pickForm" label-width="110px">
+              <el-row :gutter="16">
+                <el-col :xs="24" :md="12">
+                  <el-form-item label="领料人">
+                    <el-input v-model="pickForm.picker" disabled />
+                  </el-form-item>
+                </el-col>
+                <el-col :xs="24" :md="12">
+                  <el-form-item label="备件仓库">
+                    <el-input v-model="pickForm.warehouse" />
+                  </el-form-item>
+                </el-col>
+                <el-col :xs="24">
+                  <el-form-item label="备件清单">
+                    <el-input
+                      v-model="pickForm.itemsText"
+                      type="textarea"
+                      :rows="3"
+                      placeholder="示例：桨叶套装|M350 RTK|1；减震球|标准件|4"
+                    />
+                  </el-form-item>
+                </el-col>
+              </el-row>
+              <el-form-item class="mb-0">
+                <el-button type="primary" @click="submitPicking">确认领料</el-button>
+              </el-form-item>
+            </el-form>
+
+            <el-form v-else-if="order.status === 'repairing'" :model="repairForm" label-width="110px">
+              <el-row :gutter="16">
+                <el-col :xs="24" :md="12">
+                  <el-form-item label="维修责任人">
+                    <el-input v-model="repairForm.technician" disabled />
+                  </el-form-item>
+                </el-col>
+                <el-col :xs="24" :md="12">
+                  <el-form-item label="工时">
+                    <el-input-number v-model="repairForm.usedHours" :min="1" :max="24" />
+                  </el-form-item>
+                </el-col>
+                <el-col :xs="24">
+                  <el-form-item label="维修措施">
+                    <el-input v-model="repairForm.solution" type="textarea" :rows="3" />
+                  </el-form-item>
+                </el-col>
+                <el-col :xs="24">
+                  <el-form-item label="维修结论">
+                    <el-input v-model="repairForm.result" type="textarea" :rows="3" />
+                  </el-form-item>
+                </el-col>
+              </el-row>
+              <el-form-item class="mb-0">
+                <el-button type="primary" @click="submitRepair">提交维修结果</el-button>
+              </el-form-item>
+            </el-form>
+
+            <el-form v-else-if="order.status === 'inspecting'" :model="inspectForm" label-width="110px">
+              <el-row :gutter="16">
+                <el-col :xs="24" :md="12">
+                  <el-form-item label="复检人">
+                    <el-input v-model="inspectForm.inspector" disabled />
+                  </el-form-item>
+                </el-col>
+                <el-col :xs="24" :md="12">
+                  <el-form-item label="复检结论">
+                    <el-radio-group v-model="inspectForm.result">
+                      <el-radio label="passed">通过</el-radio>
+                      <el-radio label="failed">不通过</el-radio>
+                    </el-radio-group>
+                  </el-form-item>
+                </el-col>
+                <el-col :xs="24" :md="12">
+                  <el-form-item label="电池核验">
+                    <el-switch v-model="inspectForm.batteryCheck" />
+                  </el-form-item>
+                </el-col>
+                <el-col :xs="24" :md="12">
+                  <el-form-item label="试飞验证">
+                    <el-switch v-model="inspectForm.flightTest" />
+                  </el-form-item>
+                </el-col>
+                <el-col :xs="24">
+                  <el-form-item label="复检说明">
+                    <el-input v-model="inspectForm.conclusion" type="textarea" :rows="3" />
+                  </el-form-item>
+                </el-col>
+              </el-row>
+              <el-form-item class="mb-0">
+                <el-button type="primary" @click="submitInspection">提交复检结果</el-button>
+              </el-form-item>
+            </el-form>
           </el-card>
-        </el-col>
-      </el-row>
+        </div>
+      </template>
 
-      <div v-if="showProcessingForm" id="workorder-processing-form" class="mt-20px">
-        <el-card shadow="never">
-          <template #header>
-            <div class="section-header">
-              <span>{{ processingFormTitle }}</span>
-            </div>
+      <el-dialog v-model="evidenceDialogVisible" title="关联证据" width="760px">
+        <el-empty v-if="!evidenceItems.length" description="当前还没有关联证据" />
+        <el-table v-else :data="evidenceItems" stripe>
+          <el-table-column label="附件名称" prop="name" min-width="260" />
+          <el-table-column label="类型" prop="displayType" width="120" />
+          <el-table-column label="大小" width="120">
+            <template #default="{ row }">{{ formatFileSize(row.size) }}</template>
+          </el-table-column>
+          <el-table-column label="格式" prop="mimeType" min-width="160" />
+        </el-table>
+      </el-dialog>
+
+      <el-dialog v-model="imageImportDialogVisible" title="补录图片" width="640px">
+        <el-upload
+          drag
+          :auto-upload="false"
+          :multiple="true"
+          :limit="12"
+          :file-list="imageUploadList"
+          accept="image/*"
+          @change="handleImageUploadChange"
+          @remove="handleImageUploadRemove"
+        >
+          <div class="el-upload__text">将现场图片拖到此处，或 <em>点击选择文件</em></div>
+          <template #tip>
+            <div class="el-upload__tip">支持 JPG、PNG、WebP 等图片格式，建议补充故障现场照片与截图</div>
           </template>
+        </el-upload>
+        <template #footer>
+          <el-space wrap>
+            <el-button @click="imageImportDialogVisible = false">取消</el-button>
+            <el-button type="primary" :disabled="!imageUploadList.length" @click="submitImageImport">
+              确认补录
+            </el-button>
+          </el-space>
+        </template>
+      </el-dialog>
 
-          <el-form v-if="order.status === 'pending'" :model="acceptForm" label-width="110px">
-            <el-row :gutter="16">
-              <el-col :xs="24" :md="12">
-                <el-form-item label="受理结论">
-                  <el-input model-value="受理并进入初始诊断" disabled />
-                </el-form-item>
-              </el-col>
-              <el-col :xs="24" :md="12">
-                <el-form-item label="停飞结论">
-                  <el-input model-value="立即停飞" disabled />
-                </el-form-item>
-              </el-col>
-              <el-col :xs="24" :md="12">
-                <el-form-item label="机务负责人">
-                  <el-input v-model="acceptForm.assignee" disabled />
-                </el-form-item>
-              </el-col>
-              <el-col :xs="24" :md="12">
-                <el-form-item label="维修责任人">
-                  <el-input v-model="acceptForm.assignee" disabled />
-                </el-form-item>
-              </el-col>
-              <el-col :xs="24" :md="12">
-                <el-form-item label="节点截止时间">
-                  <el-input :model-value="order.slaDeadline" disabled />
-                </el-form-item>
-              </el-col>
-              <el-col :xs="24">
-                <el-form-item label="受理备注">
-                  <el-input v-model="acceptForm.remark" type="textarea" :rows="3" />
-                </el-form-item>
-              </el-col>
-            </el-row>
-            <el-form-item class="mb-0">
-              <el-button type="primary" @click="submitAcceptance">提交受理</el-button>
-            </el-form-item>
-          </el-form>
-
-          <el-form v-else-if="order.status === 'diagnosing'" :model="diagnoseForm" label-width="110px">
-            <el-row :gutter="16">
-              <el-col :xs="24" :md="12">
-                <el-form-item label="初诊人">
-                  <el-input v-model="diagnoseForm.engineer" disabled />
-                </el-form-item>
-              </el-col>
-              <el-col :xs="24" :md="12">
-                <el-form-item label="故障分类">
-                  <el-input v-model="diagnoseForm.faultCategory" placeholder="例如：飞控系统" />
-                </el-form-item>
-              </el-col>
-              <el-col :xs="24" :md="12">
-                <el-form-item label="风险等级">
-                  <el-select v-model="diagnoseForm.riskLevel" class="!w-100%">
-                    <el-option label="高风险" value="high" />
-                    <el-option label="中风险" value="medium" />
-                    <el-option label="低风险" value="low" />
-                  </el-select>
-                </el-form-item>
-              </el-col>
-              <el-col :xs="24" :md="12">
-                <el-form-item label="建议备件">
-                  <el-input
-                    v-model="diagnoseForm.suggestedPartsText"
-                    placeholder="多个备件用顿号分隔"
-                  />
-                </el-form-item>
-              </el-col>
-              <el-col :xs="24">
-                <el-form-item label="诊断结论">
-                  <el-input v-model="diagnoseForm.conclusion" type="textarea" :rows="3" />
-                </el-form-item>
-              </el-col>
-            </el-row>
-            <el-form-item class="mb-0">
-              <el-button type="primary" @click="submitDiagnosis">提交初诊</el-button>
-            </el-form-item>
-          </el-form>
-
-          <el-form v-else-if="order.status === 'picking'" :model="pickForm" label-width="110px">
-            <el-row :gutter="16">
-              <el-col :xs="24" :md="12">
-                <el-form-item label="领料人">
-                  <el-input v-model="pickForm.picker" disabled />
-                </el-form-item>
-              </el-col>
-              <el-col :xs="24" :md="12">
-                <el-form-item label="备件仓库">
-                  <el-input v-model="pickForm.warehouse" />
-                </el-form-item>
-              </el-col>
-              <el-col :xs="24">
-                <el-form-item label="备件清单">
-                  <el-input
-                    v-model="pickForm.itemsText"
-                    type="textarea"
-                    :rows="3"
-                    placeholder="示例：桨叶套装|M350 RTK|1；减震球|标准件|4"
-                  />
-                </el-form-item>
-              </el-col>
-            </el-row>
-            <el-form-item class="mb-0">
-              <el-button type="primary" @click="submitPicking">确认领料</el-button>
-            </el-form-item>
-          </el-form>
-
-          <el-form v-else-if="order.status === 'repairing'" :model="repairForm" label-width="110px">
-            <el-row :gutter="16">
-              <el-col :xs="24" :md="12">
-                <el-form-item label="维修责任人">
-                  <el-input v-model="repairForm.technician" disabled />
-                </el-form-item>
-              </el-col>
-              <el-col :xs="24" :md="12">
-                <el-form-item label="工时">
-                  <el-input-number v-model="repairForm.usedHours" :min="1" :max="24" />
-                </el-form-item>
-              </el-col>
-              <el-col :xs="24">
-                <el-form-item label="维修措施">
-                  <el-input v-model="repairForm.solution" type="textarea" :rows="3" />
-                </el-form-item>
-              </el-col>
-              <el-col :xs="24">
-                <el-form-item label="维修结论">
-                  <el-input v-model="repairForm.result" type="textarea" :rows="3" />
-                </el-form-item>
-              </el-col>
-            </el-row>
-            <el-form-item class="mb-0">
-              <el-button type="primary" @click="submitRepair">提交维修结果</el-button>
-            </el-form-item>
-          </el-form>
-
-          <el-form v-else-if="order.status === 'inspecting'" :model="inspectForm" label-width="110px">
-            <el-row :gutter="16">
-              <el-col :xs="24" :md="12">
-                <el-form-item label="复检人">
-                  <el-input v-model="inspectForm.inspector" disabled />
-                </el-form-item>
-              </el-col>
-              <el-col :xs="24" :md="12">
-                <el-form-item label="复检结论">
-                  <el-radio-group v-model="inspectForm.result">
-                    <el-radio label="passed">通过</el-radio>
-                    <el-radio label="failed">不通过</el-radio>
-                  </el-radio-group>
-                </el-form-item>
-              </el-col>
-              <el-col :xs="24" :md="12">
-                <el-form-item label="电池核验">
-                  <el-switch v-model="inspectForm.batteryCheck" />
-                </el-form-item>
-              </el-col>
-              <el-col :xs="24" :md="12">
-                <el-form-item label="试飞验证">
-                  <el-switch v-model="inspectForm.flightTest" />
-                </el-form-item>
-              </el-col>
-              <el-col :xs="24">
-                <el-form-item label="复检说明">
-                  <el-input v-model="inspectForm.conclusion" type="textarea" :rows="3" />
-                </el-form-item>
-              </el-col>
-            </el-row>
-            <el-form-item class="mb-0">
-              <el-button type="primary" @click="submitInspection">提交复检结果</el-button>
-            </el-form-item>
-          </el-form>
-        </el-card>
-      </div>
-    </template>
+      <el-dialog v-model="logImportDialogVisible" title="导入日志" width="640px">
+        <el-upload
+          drag
+          :auto-upload="false"
+          :multiple="true"
+          :limit="8"
+          :file-list="logUploadList"
+          accept=".log,.txt,.csv,.json,.zip,.rar,.7z"
+          @change="handleLogUploadChange"
+          @remove="handleLogUploadRemove"
+        >
+          <div class="el-upload__text">将日志文件拖到此处，或 <em>点击选择文件</em></div>
+          <template #tip>
+            <div class="el-upload__tip">支持飞控日志、检测报告、压缩包等日志附件</div>
+          </template>
+        </el-upload>
+        <template #footer>
+          <el-space wrap>
+            <el-button @click="logImportDialogVisible = false">取消</el-button>
+            <el-button type="primary" :disabled="!logUploadList.length" @click="submitLogImport">
+              确认导入
+            </el-button>
+          </el-space>
+        </template>
+      </el-dialog>
+    </div>
   </ContentWrap>
 </template>
 
 <script lang="ts" setup>
+import type { UploadFile, UploadFiles, UploadUserFile } from 'element-plus'
 import { ContentWrap } from '@/components/ContentWrap'
 import { useUserStoreWithOut } from '@/store/modules/user'
 import {
   RELEASE_META,
   YianWorkorderApi,
+  type WorkorderAttachmentItem,
   type WorkorderRiskLevel,
   type WorkorderVO
 } from '@/api/yian/workorder'
@@ -417,24 +480,58 @@ const inspectForm = reactive({
   flightTest: true
 })
 
+const evidenceDialogVisible = ref(false)
+const imageImportDialogVisible = ref(false)
+const logImportDialogVisible = ref(false)
+const imageUploadList = ref<UploadUserFile[]>([])
+const logUploadList = ref<UploadUserFile[]>([])
+const pendingImageAttachments = ref<WorkorderAttachmentItem[]>([])
+const pendingLogAttachments = ref<WorkorderAttachmentItem[]>([])
+
 const timelineItems = computed(() => order.value?.timeline || [])
 const taskSceneText = computed(() => order.value?.taskScene || '待补录')
+const imageAttachments = computed(() => order.value?.imageAttachments || [])
+const logAttachments = computed(() => order.value?.logAttachments || [])
+const evidenceItems = computed(() => [
+  ...imageAttachments.value.map((item) => ({
+    ...item,
+    displayType: '现场图片'
+  })),
+  ...logAttachments.value.map((item) => ({
+    ...item,
+    displayType: '日志附件'
+  }))
+])
 const reporterDisplay = computed(() => {
   if (!order.value) return '-'
   return order.value.reporterPhone
     ? `${order.value.creator} / ${order.value.reporterPhone}`
     : order.value.creator
 })
+const logSummaryText = computed(() =>
+  logAttachments.value.length
+    ? logAttachments.value.map((item) => item.name).join(' / ')
+    : '当前还没有补录飞行日志，建议尽快导入原始日志包。'
+)
+const imageSummaryText = computed(() =>
+  imageAttachments.value.length
+    ? imageAttachments.value.map((item) => item.name).join(' / ')
+    : '当前还没有补录现场图片，可继续补充故障现场照片或截图。'
+)
 
 const releaseTagType = (status: WorkorderVO['releaseStatus']) => RELEASE_META[status].tagType
 const releaseLabel = (status: WorkorderVO['releaseStatus']) => RELEASE_META[status].label
 const riskTagType = (value: WorkorderVO['riskLevel']) =>
   value === 'high' ? 'danger' : value === 'medium' ? 'warning' : value === 'low' ? 'success' : 'info'
 const riskLevelLabel = (value: WorkorderRiskLevel | 'unrated') =>
-  ({ high: '高风险', medium: '中风险', low: '低风险', unrated: '未定级' } as Record<
-    WorkorderRiskLevel | 'unrated',
-    string
-  >)[value]
+  (
+    {
+      high: '高风险',
+      medium: '中风险',
+      low: '低风险',
+      unrated: '未定级'
+    } as Record<WorkorderRiskLevel | 'unrated', string>
+  )[value]
 
 const groundedTag = computed(() => {
   if (!order.value) return { label: '-', type: 'info' as const }
@@ -459,27 +556,11 @@ const stageResult = computed<DetailBlock>(() => {
       tagLabel: order.value.acceptance ? '已受理' : '待受理',
       tagType: order.value.acceptance ? 'success' : 'warning',
       fields: [
-        {
-          label: '受理结论',
-          value: order.value.acceptance ? '受理并进入初始诊断' : '待受理'
-        },
-        {
-          label: '停飞结论',
-          value: groundedTag.value.label === '已放行' ? '可放行' : '立即停飞'
-        },
-        {
-          label: '机务负责人',
-          value: order.value.acceptance?.assignee || order.value.owner || '待分派'
-        },
-        {
-          label: '维修责任人',
-          value: order.value.diagnosis?.engineer || order.value.owner || '待分派'
-        },
-        {
-          label: '受理备注',
-          value: order.value.acceptance?.remark || '待补录受理备注',
-          full: true
-        }
+        { label: '受理结论', value: order.value.acceptance ? '受理并进入初始诊断' : '待受理' },
+        { label: '停飞结论', value: groundedTag.value.label === '已放行' ? '可放行' : '立即停飞' },
+        { label: '机务负责人', value: order.value.acceptance?.assignee || order.value.owner || '待分派' },
+        { label: '维修责任人', value: order.value.diagnosis?.engineer || order.value.owner || '待分派' },
+        { label: '受理备注', value: order.value.acceptance?.remark || '待补录受理备注', full: true }
       ]
     }
   }
@@ -493,15 +574,8 @@ const stageResult = computed<DetailBlock>(() => {
         { label: '初诊人', value: order.value.diagnosis?.engineer || '待补录' },
         { label: '故障分类', value: order.value.diagnosis?.faultCategory || '待补录' },
         { label: '风险等级', value: riskLevelLabel(order.value.riskLevel) },
-        {
-          label: '建议备件',
-          value: order.value.diagnosis?.suggestedParts.join('、') || '待补录'
-        },
-        {
-          label: '诊断结论',
-          value: order.value.diagnosis?.conclusion || '待补录诊断结论',
-          full: true
-        }
+        { label: '建议备件', value: order.value.diagnosis?.suggestedParts.join('、') || '待补录' },
+        { label: '诊断结论', value: order.value.diagnosis?.conclusion || '待补录诊断结论', full: true }
       ]
     }
   }
@@ -515,15 +589,8 @@ const stageResult = computed<DetailBlock>(() => {
         { label: '领料人', value: order.value.picking?.picker || '待补录' },
         { label: '备件仓库', value: order.value.picking?.warehouse || '待补录' },
         { label: '领料时间', value: order.value.picking?.pickedAt || '待补录' },
-        {
-          label: '领料项数',
-          value: order.value.picking ? `${order.value.picking.items.length} 项` : '待补录'
-        },
-        {
-          label: '备件明细',
-          value: formatMaterialItems(order.value.picking?.items),
-          full: true
-        }
+        { label: '领料项数', value: order.value.picking ? `${order.value.picking.items.length} 项` : '待补录' },
+        { label: '备件明细', value: formatMaterialItems(order.value.picking?.items), full: true }
       ]
     }
   }
@@ -536,16 +603,8 @@ const stageResult = computed<DetailBlock>(() => {
       fields: [
         { label: '维修责任人', value: order.value.repair?.technician || '待补录' },
         { label: '维修工时', value: order.value.repair ? `${order.value.repair.usedHours} 小时` : '待补录' },
-        {
-          label: '维修措施',
-          value: order.value.repair?.solution || '待补录维修措施',
-          full: true
-        },
-        {
-          label: '维修结论',
-          value: order.value.repair?.result || '待补录维修结论',
-          full: true
-        }
+        { label: '维修措施', value: order.value.repair?.solution || '待补录维修措施', full: true },
+        { label: '维修结论', value: order.value.repair?.result || '待补录维修结论', full: true }
       ]
     }
   }
@@ -557,19 +616,9 @@ const stageResult = computed<DetailBlock>(() => {
       tagType: order.value.inspection?.result === 'passed' ? 'success' : 'warning',
       fields: [
         { label: '复检人', value: order.value.inspection?.inspector || '待补录' },
-        {
-          label: '电池核验',
-          value: order.value.inspection?.batteryCheck ? '已核验' : '未核验'
-        },
-        {
-          label: '试飞验证',
-          value: order.value.inspection?.flightTest ? '已试飞' : '未试飞'
-        },
-        {
-          label: '复检说明',
-          value: order.value.inspection?.conclusion || '待补录复检结论',
-          full: true
-        }
+        { label: '电池核验', value: order.value.inspection?.batteryCheck ? '已核验' : '未核验' },
+        { label: '试飞验证', value: order.value.inspection?.flightTest ? '已试飞' : '未试飞' },
+        { label: '复检说明', value: order.value.inspection?.conclusion || '待补录复检结论', full: true }
       ]
     }
   }
@@ -583,11 +632,7 @@ const stageResult = computed<DetailBlock>(() => {
         { label: '审核人', value: order.value.release?.reviewer || '待补录' },
         { label: '审核时间', value: order.value.release?.reviewedAt || '待补录' },
         { label: '限制条件', value: order.value.release?.restrictions || '无' },
-        {
-          label: '审核结论',
-          value: order.value.release?.conclusion || '待补录放行结论',
-          full: true
-        }
+        { label: '审核结论', value: order.value.release?.conclusion || '待补录放行结论', full: true }
       ]
     }
   }
@@ -598,46 +643,13 @@ const stageResult = computed<DetailBlock>(() => {
     tagType: 'info',
     fields: [
       { label: '关闭状态', value: '工单已关闭' },
-      { label: '当前责任人', value: order.value.owner || '待补录' },
+      { label: '当前负责人', value: order.value.owner || '待补录' },
       {
         label: '关闭说明',
         value: order.value.timeline[order.value.timeline.length - 1]?.detail || '待补录关闭说明',
         full: true
       }
     ]
-  }
-})
-
-const flightLogMeta = computed(() => {
-  if (!order.value) return { count: 0, text: '-' }
-  const count = order.value.source === 'manual' ? 0 : 1
-  if (!count) {
-    return {
-      count,
-      text: '当前未补录飞行日志，建议尽快导入原始日志包。'
-    }
-  }
-  return {
-    count,
-    text: `FLIGHT_LOG_${order.value.orderNo.replace(/^WO-/, '').replace(/-/g, '_')}.zip，${order.value.createTime} 上传。`
-  }
-})
-
-const photoEvidenceMeta = computed(() => {
-  if (!order.value) return { count: 0, text: '-' }
-  const countMap: Record<WorkorderVO['source'], number> = {
-    pilot: 5,
-    inspection: 3,
-    alert: 2,
-    aftersale: 4,
-    maintenance: 4,
-    service: 2,
-    manual: 1
-  }
-  const count = countMap[order.value.source]
-  return {
-    count,
-    text: `现场照片与异常截图共 ${count} 份，已绑定当前工单。`
   }
 })
 
@@ -771,11 +783,87 @@ const handlePrimaryAction = () => {
 }
 
 const handleViewEvidence = () => {
-  message.info('MVP 演示版暂以工单详情摘要展示证据，后续可接入证据查看器。')
+  evidenceDialogVisible.value = true
+}
+
+const handleImportImage = () => {
+  imageImportDialogVisible.value = true
 }
 
 const handleImportLog = () => {
-  message.info('MVP 演示版暂未接入真实日志导入页，可在原型中查看导入入口。')
+  logImportDialogVisible.value = true
+}
+
+const toUploadUserFiles = (files: UploadFiles) =>
+  files.map((item) => ({
+    name: item.name,
+    status: item.status,
+    url: item.url
+  }))
+
+const toAttachmentMeta = (
+  files: UploadFiles,
+  type: WorkorderAttachmentItem['type']
+): WorkorderAttachmentItem[] =>
+  files.map((item) => ({
+    name: item.name,
+    type,
+    size: item.raw?.size ?? 0,
+    mimeType: item.raw?.type || ''
+  }))
+
+const handleImageUploadChange = (_file: UploadFile, files: UploadFiles) => {
+  imageUploadList.value = toUploadUserFiles(files)
+  pendingImageAttachments.value = toAttachmentMeta(files, 'image')
+}
+
+const handleImageUploadRemove = (_file: UploadFile, files: UploadFiles) => {
+  imageUploadList.value = toUploadUserFiles(files)
+  pendingImageAttachments.value = toAttachmentMeta(files, 'image')
+}
+
+const handleLogUploadChange = (_file: UploadFile, files: UploadFiles) => {
+  logUploadList.value = toUploadUserFiles(files)
+  pendingLogAttachments.value = toAttachmentMeta(files, 'log')
+}
+
+const handleLogUploadRemove = (_file: UploadFile, files: UploadFiles) => {
+  logUploadList.value = toUploadUserFiles(files)
+  pendingLogAttachments.value = toAttachmentMeta(files, 'log')
+}
+
+const submitImageImport = () => {
+  if (!order.value || !pendingImageAttachments.value.length) {
+    message.warning('请先选择要补录的图片文件')
+    return
+  }
+  YianWorkorderApi.appendAttachments(order.value.id, {
+    type: 'image',
+    files: pendingImageAttachments.value,
+    operator: currentOperatorName.value
+  })
+  message.success(`已补录 ${pendingImageAttachments.value.length} 份现场图片`)
+  imageImportDialogVisible.value = false
+  imageUploadList.value = []
+  pendingImageAttachments.value = []
+  loadOrder()
+}
+
+const submitLogImport = () => {
+  if (!order.value || !pendingLogAttachments.value.length) {
+    message.warning('请先选择要导入的日志文件')
+    return
+  }
+  YianWorkorderApi.appendAttachments(order.value.id, {
+    type: 'log',
+    files: pendingLogAttachments.value,
+    operator: currentOperatorName.value
+  })
+  message.success(`已补录 ${pendingLogAttachments.value.length} 份日志附件`)
+  logImportDialogVisible.value = false
+  logUploadList.value = []
+  pendingLogAttachments.value = []
+  loadOrder()
 }
 
 const submitAcceptance = () => {
@@ -867,10 +955,24 @@ const submitInspection = () => {
   loadOrder()
 }
 
+const formatFileSize = (size: number) => {
+  if (!size) return '-'
+  if (size < 1024) return `${size} B`
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`
+  return `${(size / 1024 / 1024).toFixed(1)} MB`
+}
+
 watch(
   () => route.params.id,
   () => {
     loadOrder()
+    evidenceDialogVisible.value = false
+    imageImportDialogVisible.value = false
+    logImportDialogVisible.value = false
+    imageUploadList.value = []
+    logUploadList.value = []
+    pendingImageAttachments.value = []
+    pendingLogAttachments.value = []
   },
   { immediate: true }
 )
@@ -971,6 +1073,10 @@ watch(
 
 .text-danger {
   color: var(--el-color-danger);
+}
+
+:deep(.el-upload-dragger) {
+  width: 100%;
 }
 
 @media (max-width: 900px) {

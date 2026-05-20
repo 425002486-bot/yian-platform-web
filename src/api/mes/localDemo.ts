@@ -1,9 +1,6 @@
 import dayjs from 'dayjs'
 import { useCache } from '@/hooks/web/useCache'
-import {
-  MesAutoCodeRuleCode,
-  MesDvMachineryStatusEnum
-} from '@/views/mes/utils/constants'
+import { MesAutoCodeRuleCode, MesDvMachineryStatusEnum } from '@/views/mes/utils/constants'
 
 export interface LocalDemoWorkshopVO {
   id: number
@@ -60,6 +57,79 @@ export const isLocalMesDemoEnabled = () => {
 
 const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value))
 
+const AIRCRAFT_MACHINERY_TYPE_ID = 401
+const AIRCRAFT_MACHINERY_TYPE_NAME = '无人机整机'
+const LEGACY_AIRCRAFT_TYPE_IDS = new Set([402, 403])
+const LEGACY_AIRCRAFT_NAME_HINTS = ['无人机', 'UAV', 'Multirotor', 'Inspection']
+
+const defaultMachineryTypes: LocalDemoMachineryTypeVO[] = [
+  {
+    id: 401,
+    parentId: 0,
+    code: 'AIRCRAFT',
+    name: '无人机整机',
+    sort: 10,
+    status: 1,
+    remark: '无人机主机设备'
+  },
+  {
+    id: 402,
+    parentId: 0,
+    code: 'REMOTE_CONTROLLER',
+    name: '遥控器',
+    sort: 20,
+    status: 1,
+    remark: '飞手操控终端'
+  },
+  {
+    id: 403,
+    parentId: 0,
+    code: 'GIMBAL_PAYLOAD',
+    name: '云台载荷',
+    sort: 30,
+    status: 1,
+    remark: '相机、喊话器、探照灯等载荷'
+  },
+  {
+    id: 404,
+    parentId: 0,
+    code: 'RTK_DEVICE',
+    name: 'RTK设备',
+    sort: 40,
+    status: 1,
+    remark: '定位与差分相关设备'
+  },
+  {
+    id: 405,
+    parentId: 0,
+    code: 'CHARGING_DEVICE',
+    name: '充电设备',
+    sort: 50,
+    status: 1,
+    remark: '电池或整机充电配套设备'
+  },
+  {
+    id: 406,
+    parentId: 0,
+    code: 'HANGAR_DOCK',
+    name: '机库/机场柜',
+    sort: 60,
+    status: 1,
+    remark: '机库、机场柜等停放保障设备'
+  },
+  {
+    id: 407,
+    parentId: 0,
+    code: 'GROUND_STATION',
+    name: '地面站终端',
+    sort: 70,
+    status: 1,
+    remark: '地面站、图传与调度终端'
+  }
+]
+
+const defaultMachineryTypeIdSet = new Set(defaultMachineryTypes.map((item) => item.id))
+
 const seededWorkshops: LocalDemoWorkshopVO[] = [
   {
     id: 201,
@@ -84,7 +154,7 @@ const seededWorkshops: LocalDemoWorkshopVO[] = [
   {
     id: 203,
     code: 'SITE-HZ-MAINT',
-    name: 'UAV Maintenance Workshop',
+    name: '无人机维修中心',
     area: 640,
     chargeUserId: 9003,
     chargeUserName: '芊道源码',
@@ -93,35 +163,7 @@ const seededWorkshops: LocalDemoWorkshopVO[] = [
   }
 ]
 
-const seededMachineryTypes: LocalDemoMachineryTypeVO[] = [
-  {
-    id: 401,
-    parentId: 0,
-    code: 'UAV',
-    name: '无人机',
-    sort: 1,
-    status: 1,
-    remark: '资产中心主分类'
-  },
-  {
-    id: 402,
-    parentId: 401,
-    code: 'UAV-MULTI',
-    name: 'Multirotor UAV 多旋翼无人机',
-    sort: 10,
-    status: 1,
-    remark: '主流巡检机型'
-  },
-  {
-    id: 403,
-    parentId: 401,
-    code: 'UAV-INSPECT',
-    name: 'Inspection UAV 检测无人机',
-    sort: 20,
-    status: 1,
-    remark: '轻量化检测机型'
-  }
-]
+const seededMachineryTypes: LocalDemoMachineryTypeVO[] = defaultMachineryTypes
 
 const seededMachineries: LocalDemoMachineryVO[] = [
   {
@@ -130,8 +172,8 @@ const seededMachineries: LocalDemoMachineryVO[] = [
     name: 'Inspection UAV 01',
     brand: 'DJI',
     specification: 'Matrice 350 RTK',
-    machineryTypeId: 402,
-    machineryTypeName: 'Multirotor UAV 多旋翼无人机',
+    machineryTypeId: AIRCRAFT_MACHINERY_TYPE_ID,
+    machineryTypeName: AIRCRAFT_MACHINERY_TYPE_NAME,
     workshopId: 201,
     workshopName: '杭州余杭站',
     status: MesDvMachineryStatusEnum.MAINTENANCE,
@@ -146,8 +188,8 @@ const seededMachineries: LocalDemoMachineryVO[] = [
     name: 'Inspection UAV 02',
     brand: 'Autel',
     specification: 'EVO Max 4T',
-    machineryTypeId: 403,
-    machineryTypeName: 'Inspection UAV 检测无人机',
+    machineryTypeId: AIRCRAFT_MACHINERY_TYPE_ID,
+    machineryTypeName: AIRCRAFT_MACHINERY_TYPE_NAME,
     workshopId: 202,
     workshopName: '苏州工业园站',
     status: MesDvMachineryStatusEnum.PRODUCING,
@@ -162,10 +204,10 @@ const seededMachineries: LocalDemoMachineryVO[] = [
     name: 'E2E Host 101',
     brand: 'DJI',
     specification: 'M350 RTK',
-    machineryTypeId: 402,
-    machineryTypeName: 'Multirotor UAV 多旋翼无人机',
+    machineryTypeId: AIRCRAFT_MACHINERY_TYPE_ID,
+    machineryTypeName: AIRCRAFT_MACHINERY_TYPE_NAME,
     workshopId: 203,
-    workshopName: 'UAV Maintenance Workshop',
+    workshopName: '无人机维修中心',
     status: MesDvMachineryStatusEnum.STOP,
     lastMaintenTime: '2026-05-12 18:22',
     lastCheckTime: '',
@@ -179,23 +221,83 @@ const seededStore: LocalDemoStore = {
   machineryTypes: seededMachineryTypes,
   machineries: seededMachineries,
   counters: {
-    machinery: 3,
-    workshop: 3,
-    machineryType: 3
+    machinery: seededMachineries.length,
+    workshop: seededWorkshops.length,
+    machineryType: defaultMachineryTypes.length
   }
 }
 
-const getStore = (): LocalDemoStore => {
-  const cached = wsCache.get(STORAGE_KEY) as LocalDemoStore | undefined
-  if (!cached) {
-    wsCache.set(STORAGE_KEY, clone(seededStore))
-    return clone(seededStore)
+const matchesKeyword = (value: string | undefined, keyword?: string) => {
+  if (!keyword) return true
+  return String(value || '')
+    .toLowerCase()
+    .includes(keyword.toLowerCase())
+}
+
+const isLegacyAircraftTypeName = (value?: string) =>
+  LEGACY_AIRCRAFT_NAME_HINTS.some((hint) => String(value || '').includes(hint))
+
+const normalizeMachineryTypes = (types: LocalDemoMachineryTypeVO[]) => {
+  const customTypes = types.filter((item) => !defaultMachineryTypeIdSet.has(item.id))
+  return [...defaultMachineryTypes.map((item) => ({ ...item })), ...customTypes]
+}
+
+const normalizeMachineryRecord = (
+  machinery: LocalDemoMachineryVO,
+  machineryTypes: LocalDemoMachineryTypeVO[]
+): LocalDemoMachineryVO => {
+  const next = { ...machinery }
+  const matchedType = machineryTypes.find((item) => item.id === next.machineryTypeId)
+
+  if (
+    LEGACY_AIRCRAFT_TYPE_IDS.has(next.machineryTypeId) &&
+    next.machineryTypeName !== matchedType?.name &&
+    isLegacyAircraftTypeName(next.machineryTypeName)
+  ) {
+    next.machineryTypeId = AIRCRAFT_MACHINERY_TYPE_ID
+    next.machineryTypeName = AIRCRAFT_MACHINERY_TYPE_NAME
+    return next
   }
-  return clone(cached)
+
+  if (!matchedType && isLegacyAircraftTypeName(next.machineryTypeName)) {
+    next.machineryTypeId = AIRCRAFT_MACHINERY_TYPE_ID
+    next.machineryTypeName = AIRCRAFT_MACHINERY_TYPE_NAME
+    return next
+  }
+
+  if (matchedType) {
+    next.machineryTypeName = matchedType.name
+  }
+
+  return next
+}
+
+const ensureStoreDefaults = (store: LocalDemoStore): LocalDemoStore => {
+  const nextStore = clone(store)
+  nextStore.machineryTypes = normalizeMachineryTypes(nextStore.machineryTypes)
+  nextStore.machineries = nextStore.machineries.map((item) =>
+    normalizeMachineryRecord(item, nextStore.machineryTypes)
+  )
+  nextStore.counters = {
+    machinery: Math.max(nextStore.counters.machinery || 0, nextStore.machineries.length),
+    workshop: Math.max(nextStore.counters.workshop || 0, nextStore.workshops.length),
+    machineryType: Math.max(
+      nextStore.counters.machineryType || 0,
+      nextStore.machineryTypes.length
+    )
+  }
+  return nextStore
 }
 
 const setStore = (value: LocalDemoStore) => {
   wsCache.set(STORAGE_KEY, clone(value))
+}
+
+const getStore = (): LocalDemoStore => {
+  const cached = wsCache.get(STORAGE_KEY) as LocalDemoStore | undefined
+  const normalizedStore = ensureStoreDefaults(cached || seededStore)
+  setStore(normalizedStore)
+  return clone(normalizedStore)
 }
 
 const nextCounter = (store: LocalDemoStore, key: keyof LocalDemoStore['counters']) => {
@@ -204,11 +306,20 @@ const nextCounter = (store: LocalDemoStore, key: keyof LocalDemoStore['counters'
   return next
 }
 
-const matchesKeyword = (value: string | undefined, keyword?: string) => {
-  if (!keyword) return true
-  return String(value || '')
-    .toLowerCase()
-    .includes(keyword.toLowerCase())
+const normalizeIdentityValue = (value?: string) => String(value || '').trim().toUpperCase()
+
+const ensureMachineryCodeUnique = (
+  store: LocalDemoStore,
+  payload: Partial<LocalDemoMachineryVO>
+) => {
+  const nextCode = normalizeIdentityValue(payload.code)
+  if (!nextCode) return
+  const duplicated = store.machineries.find(
+    (item) => item.id !== payload.id && normalizeIdentityValue(item.code) === nextCode
+  )
+  if (duplicated) {
+    throw new Error(`设备编号重复：${payload.code}`)
+  }
 }
 
 export const LocalDemoMesApi = {
@@ -276,10 +387,9 @@ export const LocalDemoMesApi = {
 
   getMachineryTypeList: (params: Record<string, any> = {}) => {
     const keyword = String(params.name || params.code || '').trim()
-    const list = getStore().machineryTypes.filter(
+    return getStore().machineryTypes.filter(
       (item) => matchesKeyword(item.name, keyword) || matchesKeyword(item.code, keyword)
     )
-    return list
   },
 
   getMachineryType: (id: number) =>
@@ -355,17 +465,16 @@ export const LocalDemoMesApi = {
 
   createMachinery: (payload: Partial<LocalDemoMachineryVO>) => {
     const store = getStore()
+    ensureMachineryCodeUnique(store, payload)
     const count = nextCounter(store, 'machinery')
     const workshop =
       store.workshops.find((item) => item.id === payload.workshopId) || store.workshops[0]
     const type =
       store.machineryTypes.find((item) => item.id === payload.machineryTypeId) ||
-      store.machineryTypes[1]
+      store.machineryTypes[0]
     const machinery: LocalDemoMachineryVO = {
       id: payload.id || 1200 + count,
-      code:
-        payload.code ||
-        `UAV-${dayjs().format('YYYYMMDD')}${String(count).padStart(3, '0')}`,
+      code: payload.code || `UAV-${dayjs().format('YYYYMMDD')}${String(count).padStart(3, '0')}`,
       name: payload.name || `Inspection UAV ${count}`,
       brand: payload.brand || '',
       specification: payload.specification || '',
@@ -386,6 +495,7 @@ export const LocalDemoMesApi = {
 
   updateMachinery: (payload: Partial<LocalDemoMachineryVO>) => {
     const store = getStore()
+    ensureMachineryCodeUnique(store, payload)
     const index = store.machineries.findIndex((item) => item.id === payload.id)
     if (index < 0) return false
     const workshop = payload.workshopId

@@ -1,4 +1,4 @@
-import { Layout } from '@/utils/routerHelper'
+﻿import { Layout } from '@/utils/routerHelper'
 
 const { t } = useI18n()
 /**
@@ -69,6 +69,29 @@ const remainingRouter: AppRouteRecordRaw[] = [
           noCache: false,
           affix: true
         }
+      },
+    ]
+  },
+  {
+    path: '/dashboard',
+    component: Layout,
+    redirect: '/dashboard/index',
+    name: 'YianDashboardAlias',
+    meta: {
+      hidden: true
+    },
+    children: [
+      {
+        path: 'index',
+        component: () => import('@/views/Home/Index.vue'),
+        name: 'YianDashboardAliasIndex',
+        meta: {
+          title: '工作台',
+          icon: 'ep:monitor',
+          noCache: false,
+          hidden: true,
+          canTo: true
+        }
       }
     ]
   },
@@ -128,6 +151,32 @@ const remainingRouter: AppRouteRecordRaw[] = [
         }
       },
       {
+        path: 'battery/detail/:id/docs',
+        component: () => import('@/views/yian/asset/battery/docs.vue'),
+        name: 'AssetBatteryDocs',
+        meta: {
+          noCache: true,
+          hidden: true,
+          canTo: true,
+          icon: 'ep:document',
+          title: '建档附件',
+          activeMenu: '/asset/battery'
+        }
+      },
+      {
+        path: 'battery/detail/:id/inspection',
+        component: () => import('@/views/yian/asset/inspection/create.vue'),
+        name: 'AssetBatteryInspection',
+        meta: {
+          noCache: true,
+          hidden: true,
+          canTo: true,
+          icon: 'ep:checked',
+          title: '\u53d1\u8d77\u8bbe\u5907\u5de1\u68c0',
+          activeMenu: '/asset/inspection'
+        }
+      },
+      {
         path: 'device/detail/:id',
         component: () => import('@/views/yian/asset/device/detail.vue'),
         name: 'AssetDeviceDetail',
@@ -168,15 +217,28 @@ const remainingRouter: AppRouteRecordRaw[] = [
       },
       {
         path: 'device/detail/:id/inspection',
-        component: () => import('@/views/yian/asset/device/inspection.vue'),
+        component: () => import('@/views/yian/asset/inspection/create.vue'),
         name: 'AssetDeviceInspection',
         meta: {
           noCache: true,
           hidden: true,
           canTo: true,
           icon: 'ep:checked',
-          title: '设备巡检',
-          activeMenu: '/asset/device'
+          title: '\u53d1\u8d77\u8bbe\u5907\u5de1\u68c0',
+          activeMenu: '/asset/inspection'
+        }
+      },
+      {
+        path: 'inspection/create',
+        component: () => import('@/views/yian/asset/inspection/create.vue'),
+        name: 'AssetInspectionCreate',
+        meta: {
+          noCache: true,
+          hidden: true,
+          canTo: true,
+          icon: 'ep:checked',
+          title: '\u53d1\u8d77\u8bbe\u5907\u5de1\u68c0',
+          activeMenu: '/asset/inspection'
         }
       }
     ]
@@ -944,3 +1006,5 @@ const remainingRouter: AppRouteRecordRaw[] = [
 ]
 
 export default remainingRouter
+
+

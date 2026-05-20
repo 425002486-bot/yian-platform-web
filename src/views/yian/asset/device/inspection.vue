@@ -9,34 +9,6 @@
     <el-skeleton v-if="loading" :rows="8" animated class="mt-20px" />
 
     <template v-else-if="device">
-      <el-row :gutter="16" class="mt-20px">
-        <el-col :xs="24" :md="8">
-          <el-card shadow="hover" class="summary-block">
-            <div class="summary-block__title">设备状态</div>
-            <el-tag :type="record.currentStatusTagType">{{ record.currentStatusLabel }}</el-tag>
-            <div class="summary-block__headline mt-10px">{{ record.enableStatusLabel }}</div>
-            <div class="summary-block__text">{{ record.statusReason }}</div>
-          </el-card>
-        </el-col>
-        <el-col :xs="24" :md="8">
-          <el-card shadow="hover" class="summary-block">
-            <div class="summary-block__title">最近巡检</div>
-            <div class="summary-block__headline">{{ record.latestInspectionAt || '暂无记录' }}</div>
-            <div class="summary-block__text">{{ record.latestInspectionConclusion }}</div>
-            <div class="summary-block__hint">{{ record.inspectionDueText }}</div>
-          </el-card>
-        </el-col>
-        <el-col :xs="24" :md="8">
-          <el-card shadow="hover" class="summary-block">
-            <div class="summary-block__title">填写说明</div>
-            <div class="summary-block__text">
-              巡检项默认全部勾选为正常，取消勾选并在备注中补充异常说明即可。
-            </div>
-            <div class="summary-block__hint">提交后会自动返回设备详情，并定位到巡检记录区块。</div>
-          </el-card>
-        </el-col>
-      </el-row>
-
       <el-card shadow="never" class="mt-20px">
         <template #header>
           <div class="card-header">发起设备巡检</div>
@@ -75,94 +47,52 @@
                 <el-select v-model="inspectionForm.conclusion" class="!w-1/1">
                   <el-option label="合格" value="pass" />
                   <el-option label="观察" value="observe" />
-                  <el-option label="停飞建议" value="grounded" />
+                  <el-option label="异常" value="grounded" />
                 </el-select>
               </el-form-item>
             </el-col>
           </el-row>
 
-          <el-form-item label="结构与外观" prop="structureItems">
+          <el-form-item
+            v-for="section in checklistSections"
+            :key="section.label"
+            :label="section.label"
+            :prop="section.itemsField"
+          >
             <div class="checklist-block">
-              <el-checkbox-group v-model="inspectionForm.structureItems">
-                <el-checkbox
-                  v-for="item in structureOptions"
-                  :key="item"
-                  :label="item"
-                >
+              <el-checkbox-group v-model="inspectionForm[section.itemsField]">
+                <el-checkbox v-for="item in section.options" :key="item" :label="item">
                   {{ item }}
                 </el-checkbox>
               </el-checkbox-group>
               <el-input
-                v-model="inspectionForm.structureNote"
+                v-model="inspectionForm[section.noteField]"
                 type="textarea"
                 :rows="2"
-                placeholder="如有异常，请补充结构与外观说明"
+                :placeholder="section.placeholder"
                 class="mt-12px"
               />
             </div>
           </el-form-item>
 
-          <el-form-item label="动力系统" prop="powerItems">
-            <div class="checklist-block">
-              <el-checkbox-group v-model="inspectionForm.powerItems">
-                <el-checkbox v-for="item in powerOptions" :key="item" :label="item">
-                  {{ item }}
-                </el-checkbox>
-              </el-checkbox-group>
-              <el-input
-                v-model="inspectionForm.powerNote"
-                type="textarea"
-                :rows="2"
-                placeholder="如有异常，请补充动力系统说明"
-                class="mt-12px"
-              />
-            </div>
+          <el-form-item label="上传附件">
+            <el-upload
+              v-model:file-list="inspectionForm.uploadFiles"
+              action="#"
+              :auto-upload="false"
+              multiple
+              list-type="text"
+            >
+              <el-button type="primary" plain>上传附件</el-button>
+              <template #tip>
+                <div class="el-upload__tip">
+                  支持上传现场图片、巡检日志和补充材料；图片格式支持 JPG、PNG、JPEG，日志支持
+                  LOG、TXT、CSV、JSON、ZIP，附件支持 PDF、Word、Excel、检测报告等文件。
+                </div>
+              </template>
+            </el-upload>
           </el-form-item>
 
-          <el-form-item label="电子与传感器" prop="sensorItems">
-            <div class="checklist-block">
-              <el-checkbox-group v-model="inspectionForm.sensorItems">
-                <el-checkbox v-for="item in sensorOptions" :key="item" :label="item">
-                  {{ item }}
-                </el-checkbox>
-              </el-checkbox-group>
-              <el-input
-                v-model="inspectionForm.sensorNote"
-                type="textarea"
-                :rows="2"
-                placeholder="如有异常，请补充电子与传感器说明"
-                class="mt-12px"
-              />
-            </div>
-          </el-form-item>
-
-          <el-form-item label="证照合规" prop="complianceItems">
-            <div class="checklist-block">
-              <el-checkbox-group v-model="inspectionForm.complianceItems">
-                <el-checkbox
-                  v-for="item in complianceOptions"
-                  :key="item"
-                  :label="item"
-                >
-                  {{ item }}
-                </el-checkbox>
-              </el-checkbox-group>
-              <el-input
-                v-model="inspectionForm.complianceNote"
-                type="textarea"
-                :rows="2"
-                placeholder="如有异常，请补充证照合规说明"
-                class="mt-12px"
-              />
-            </div>
-          </el-form-item>
-
-          <el-form-item label="照片/附件说明" prop="evidence">
-            <el-input
-              v-model="inspectionForm.evidence"
-              placeholder="填写已上传的照片或附件说明，如：巡检照片 3 张"
-            />
-          </el-form-item>
           <el-form-item label="巡检备注" prop="notes">
             <el-input v-model="inspectionForm.notes" type="textarea" placeholder="请输入巡检备注" />
           </el-form-item>
@@ -186,22 +116,107 @@
 
 <script lang="ts" setup>
 import dayjs from 'dayjs'
+import type { UploadUserFile } from 'element-plus'
 import { ContentWrap } from '@/components/ContentWrap'
 import { DvMachineryApi, DvMachineryVO } from '@/api/mes/dv/machinery'
 import { useUserStoreWithOut } from '@/store/modules/user'
 import {
-  resolveAssetDeviceMasterRecord,
+  linkInspectionWorkorderToDevice,
   submitAssetDeviceInspection,
-  type AssetDeviceInspectionRecordVO,
-  type AssetDeviceMasterRecordVO
+  type AssetDeviceInspectionRecordVO
 } from '@/api/yian/asset/deviceMaster'
+import type { AssetInspectionAttachmentVO } from '@/api/yian/asset'
+import {
+  YianWorkorderApi,
+  type WorkorderAttachmentItem,
+  type WorkorderCreateReqVO
+} from '@/api/yian/workorder'
 
 defineOptions({ name: 'AssetDeviceInspection' })
 
-const structureOptions = ['机臂完好', '起落架完好', '外壳完好', '螺丝紧固']
-const powerOptions = ['桨叶完好', '电机运转正常', '电调无异常', '供电接口正常']
-const sensorOptions = ['天线连接正常', '图传正常', '避障正常', 'RTK/定位正常']
-const complianceOptions = ['二维码清晰', '保险有效', '校准记录有效', '合规资料齐全']
+const AIRCRAFT_MACHINERY_TYPE_NAME = '无人机整机'
+
+type ChecklistItemsField =
+  | 'structureItems'
+  | 'powerItems'
+  | 'sensorItems'
+  | 'complianceItems'
+
+type ChecklistNoteField =
+  | 'structureNote'
+  | 'powerNote'
+  | 'sensorNote'
+  | 'complianceNote'
+
+type ChecklistSection = {
+  label: string
+  itemsField: ChecklistItemsField
+  noteField: ChecklistNoteField
+  options: string[]
+  placeholder: string
+}
+
+const aircraftTemplate: ChecklistSection[] = [
+  {
+    label: '结构与外观',
+    itemsField: 'structureItems',
+    noteField: 'structureNote',
+    options: ['机身外观完整', '机臂/起落架稳固', '桨叶无损伤', '挂载固定正常'],
+    placeholder: '如有异常，请补充结构与外观说明'
+  },
+  {
+    label: '动力系统',
+    itemsField: 'powerItems',
+    noteField: 'powerNote',
+    options: ['电机运转正常', '电调无告警', '供电接口正常', '通电自检通过'],
+    placeholder: '如有异常，请补充动力系统说明'
+  },
+  {
+    label: '电子与传感器',
+    itemsField: 'sensorItems',
+    noteField: 'sensorNote',
+    options: ['图传链路正常', '避障/视觉正常', 'RTK/定位正常', '飞控参数正常'],
+    placeholder: '如有异常，请补充电子与传感器说明'
+  },
+  {
+    label: '证照与合规',
+    itemsField: 'complianceItems',
+    noteField: 'complianceNote',
+    options: ['设备铭牌清晰', '保险/校准在有效期内', '主档资料齐全', '首飞/例行记录已归档'],
+    placeholder: '如有异常，请补充证照与合规说明'
+  }
+]
+
+const generalTemplate: ChecklistSection[] = [
+  {
+    label: '外观与固定',
+    itemsField: 'structureItems',
+    noteField: 'structureNote',
+    options: ['外壳完整', '安装固定正常', '铭牌清晰', '无明显松动或破损'],
+    placeholder: '如有异常，请补充外观与固定说明'
+  },
+  {
+    label: '接口与线缆',
+    itemsField: 'powerItems',
+    noteField: 'powerNote',
+    options: ['线缆完好', '接口接触正常', '卡扣/插头正常', '供电连接正常'],
+    placeholder: '如有异常，请补充接口与线缆说明'
+  },
+  {
+    label: '通电与通讯',
+    itemsField: 'sensorItems',
+    noteField: 'sensorNote',
+    options: ['通电自检通过', '通讯链路正常', '无异常告警', '状态指示正常'],
+    placeholder: '如有异常，请补充通电与通讯说明'
+  },
+  {
+    label: '功能与合规',
+    itemsField: 'complianceItems',
+    noteField: 'complianceNote',
+    options: ['核心功能正常', '固件版本符合要求', '必要资料齐全', '使用记录可追溯'],
+    placeholder: '如有异常，请补充功能与合规说明'
+  }
+]
 
 type InspectionFormState = {
   inspectedAt: string
@@ -217,8 +232,8 @@ type InspectionFormState = {
   complianceItems: string[]
   complianceNote: string
   notes: string
-  evidence: string
   suggestedWorkorder: boolean
+  uploadFiles: UploadUserFile[]
 }
 
 const router = useRouter()
@@ -229,33 +244,40 @@ const userStore = useUserStoreWithOut()
 const loading = ref(false)
 const submitLoading = ref(false)
 const device = ref<DvMachineryVO | null>(null)
-const record = ref<AssetDeviceMasterRecordVO>(resolveAssetDeviceMasterRecord(null))
 const inspectionFormRef = ref()
 const currentOperatorName = computed(() => userStore.getUser.nickname || '当前账号')
+
+const isAircraftDevice = computed(() => device.value?.machineryTypeName === AIRCRAFT_MACHINERY_TYPE_NAME)
+
+const checklistSections = computed(() => (isAircraftDevice.value ? aircraftTemplate : generalTemplate))
 
 const createInspectionForm = (): InspectionFormState => ({
   inspectedAt: dayjs().format('YYYY-MM-DD HH:mm'),
   inspector: currentOperatorName.value,
   cycleLabel: '30天例行巡检',
   conclusion: 'pass',
-  structureItems: [...structureOptions],
+  structureItems: checklistSections.value[0]?.options.slice() || [],
   structureNote: '',
-  powerItems: [...powerOptions],
+  powerItems: checklistSections.value[1]?.options.slice() || [],
   powerNote: '',
-  sensorItems: [...sensorOptions],
+  sensorItems: checklistSections.value[2]?.options.slice() || [],
   sensorNote: '',
-  complianceItems: [...complianceOptions],
+  complianceItems: checklistSections.value[3]?.options.slice() || [],
   complianceNote: '',
   notes: '',
-  evidence: '',
-  suggestedWorkorder: false
+  suggestedWorkorder: false,
+  uploadFiles: []
 })
 
 const inspectionForm = ref<InspectionFormState>(createInspectionForm())
 
+const resetInspectionForm = () => {
+  inspectionForm.value = createInspectionForm()
+}
+
 const checklistValidator =
-  (field: keyof InspectionFormState) => (_rule: unknown, value: string[], callback: (error?: Error) => void) => {
-    const noteField = `${String(field).replace('Items', 'Note')}` as keyof InspectionFormState
+  (field: ChecklistItemsField) => (_rule: unknown, value: string[], callback: (error?: Error) => void) => {
+    const noteField = `${String(field).replace('Items', 'Note')}` as ChecklistNoteField
     const noteValue = String(inspectionForm.value[noteField] || '').trim()
     if (value.length || noteValue) {
       callback()
@@ -277,7 +299,7 @@ const inspectionRules = reactive({
 const getDeviceId = () => Number(route.params.id)
 
 const syncRecord = () => {
-  record.value = resolveAssetDeviceMasterRecord(device.value)
+  resetInspectionForm()
   inspectionForm.value.inspector = currentOperatorName.value
 }
 
@@ -318,12 +340,132 @@ const summarizeChecklist = (selected: string[], allOptions: string[], note: stri
     parts.push(`正常项：${selected.join('、')}`)
   }
   if (missing.length) {
-    parts.push(`异常/待复核：${missing.join('、')}`)
+    parts.push(`关注项：${missing.join('、')}`)
   }
   if (note.trim()) {
     parts.push(`备注：${note.trim()}`)
   }
   return parts.join('；')
+}
+
+const formatFileSize = (size?: number) => {
+  if (!size) return ''
+  if (size >= 1024 * 1024) return `${(size / (1024 * 1024)).toFixed(1)} MB`
+  if (size >= 1024) return `${Math.round(size / 1024)} KB`
+  return `${size} B`
+}
+
+const detectUploadCategory = (fileName: string): AssetInspectionAttachmentVO['category'] => {
+  const normalized = fileName.toLowerCase()
+  if (/\.(jpg|jpeg|png|webp|bmp|gif)$/i.test(normalized)) return '图片'
+  if (/\.(log|txt|csv|json|zip|rar|7z)$/i.test(normalized)) return '日志'
+  return '附件'
+}
+
+const mapUploadFilesToAttachments = (
+  files: UploadUserFile[],
+  inspectedAt: string,
+  inspector: string
+): AssetInspectionAttachmentVO[] =>
+  files.map((file, index) => {
+    const category = detectUploadCategory(file.name)
+    return {
+      id: `${category}-${Date.now()}-${index}`,
+      fileName: file.name,
+      category,
+      summary:
+        category === '图片'
+          ? '设备巡检现场图片'
+          : category === '日志'
+            ? '设备巡检日志文件'
+            : '设备巡检补充附件',
+      uploadedAt: inspectedAt,
+      uploadedBy: inspector,
+      sizeLabel: formatFileSize(file.size)
+    }
+  })
+
+const buildEvidenceSummary = (attachments: AssetInspectionAttachmentVO[]) => {
+  if (!attachments.length) return ''
+  const counts = attachments.reduce<Record<string, number>>((acc, item) => {
+    acc[item.category] = (acc[item.category] || 0) + 1
+    return acc
+  }, {})
+  return Object.entries(counts)
+    .map(([key, value]) => `${key}${value}份`)
+    .join(' / ')
+}
+
+const mapInspectionAttachmentsToWorkorder = (
+  attachments: AssetInspectionAttachmentVO[]
+): Pick<WorkorderCreateReqVO, 'imageAttachments' | 'logAttachments'> => {
+  const imageAttachments: WorkorderAttachmentItem[] = []
+  const logAttachments: WorkorderAttachmentItem[] = []
+
+  attachments.forEach((item) => {
+    const mapped: WorkorderAttachmentItem = {
+      name: item.fileName,
+      type: item.category === '图片' ? 'image' : 'log',
+      size: 0,
+      mimeType:
+        item.category === '图片'
+          ? 'image/*'
+          : item.category === '日志'
+            ? 'text/plain'
+            : 'application/octet-stream'
+    }
+    if (mapped.type === 'image') {
+      imageAttachments.push(mapped)
+    } else {
+      logAttachments.push(mapped)
+    }
+  })
+
+  return {
+    imageAttachments: imageAttachments.length ? imageAttachments : undefined,
+    logAttachments: logAttachments.length ? logAttachments : undefined
+  }
+}
+
+const buildInspectionWorkorderSymptom = () => {
+  const labels: Record<AssetDeviceInspectionRecordVO['conclusion'], string> = {
+    pass: '巡检通过',
+    observe: '巡检发现待复检项',
+    grounded: '巡检发现异常，建议停用整改'
+  }
+  return `${inspectionForm.value.cycleLabel}${labels[inspectionForm.value.conclusion]}`
+}
+
+const buildInspectionWorkorderDescription = (
+  attachments: AssetInspectionAttachmentVO[],
+  evidenceSummary: string
+) => {
+  const segments = [
+    inspectionForm.value.notes.trim(),
+    summarizeChecklist(
+      inspectionForm.value.structureItems,
+      checklistSections.value[0]?.options || [],
+      inspectionForm.value.structureNote
+    ),
+    summarizeChecklist(
+      inspectionForm.value.powerItems,
+      checklistSections.value[1]?.options || [],
+      inspectionForm.value.powerNote
+    ),
+    summarizeChecklist(
+      inspectionForm.value.sensorItems,
+      checklistSections.value[2]?.options || [],
+      inspectionForm.value.sensorNote
+    ),
+    summarizeChecklist(
+      inspectionForm.value.complianceItems,
+      checklistSections.value[3]?.options || [],
+      inspectionForm.value.complianceNote
+    ),
+    evidenceSummary ? `附件摘要：${evidenceSummary}` : '',
+    attachments.length ? `巡检附件：${attachments.map((item) => item.fileName).join('、')}` : ''
+  ]
+  return segments.filter(Boolean).join('\n')
 }
 
 const handleSubmitInspection = async () => {
@@ -332,46 +474,83 @@ const handleSubmitInspection = async () => {
   submitLoading.value = true
   try {
     inspectionForm.value.inspector = currentOperatorName.value
+    const inspectedAt = inspectionForm.value.inspectedAt
+    const attachments = mapUploadFilesToAttachments(
+      inspectionForm.value.uploadFiles,
+      inspectedAt,
+      inspectionForm.value.inspector
+    )
+    const evidenceSummary = buildEvidenceSummary(attachments)
+
+    const shouldCreateWorkorder =
+      inspectionForm.value.conclusion !== 'pass' && inspectionForm.value.suggestedWorkorder
+
     const nextRecord = submitAssetDeviceInspection(device.value, {
       code: device.value.code,
-      inspectedAt: inspectionForm.value.inspectedAt,
+      inspectedAt,
       inspector: inspectionForm.value.inspector,
       cycleLabel: inspectionForm.value.cycleLabel,
       structureStatus: summarizeChecklist(
         inspectionForm.value.structureItems,
-        structureOptions,
+        checklistSections.value[0]?.options || [],
         inspectionForm.value.structureNote
       ),
       powerStatus: summarizeChecklist(
         inspectionForm.value.powerItems,
-        powerOptions,
+        checklistSections.value[1]?.options || [],
         inspectionForm.value.powerNote
       ),
       sensorStatus: summarizeChecklist(
         inspectionForm.value.sensorItems,
-        sensorOptions,
+        checklistSections.value[2]?.options || [],
         inspectionForm.value.sensorNote
       ),
       complianceStatus: summarizeChecklist(
         inspectionForm.value.complianceItems,
-        complianceOptions,
+        checklistSections.value[3]?.options || [],
         inspectionForm.value.complianceNote
       ),
       conclusion: inspectionForm.value.conclusion,
       notes: inspectionForm.value.notes,
-      evidence: inspectionForm.value.evidence,
-      suggestedWorkorder: inspectionForm.value.suggestedWorkorder
+      evidence: evidenceSummary,
+      suggestedWorkorder: inspectionForm.value.suggestedWorkorder,
+      attachments
     })
+    let createdWorkorderId = 0
+    if (shouldCreateWorkorder) {
+      const attachmentPayload = mapInspectionAttachmentsToWorkorder(attachments)
+      const order = YianWorkorderApi.create({
+        deviceId: getDeviceId(),
+        deviceCode: device.value.code,
+        deviceName: device.value.name || device.value.code,
+        siteName: nextRecord.siteName,
+        source: 'inspection',
+        faultTime: inspectedAt,
+        taskScene: inspectionForm.value.cycleLabel,
+        symptom: buildInspectionWorkorderSymptom(),
+        description: buildInspectionWorkorderDescription(attachments, evidenceSummary),
+        creator: inspectionForm.value.inspector,
+        ...attachmentPayload
+      })
+      createdWorkorderId = order.id
+      linkInspectionWorkorderToDevice(device.value, {
+        code: device.value.code,
+        orderNo: order.orderNo,
+        creator: inspectionForm.value.inspector,
+        createdAt: inspectedAt
+      })
+    }
     message.success(
-      inspectionForm.value.suggestedWorkorder && inspectionForm.value.conclusion === 'grounded'
-        ? '巡检已提交，建议同步发起报修工单。'
+      shouldCreateWorkorder
+        ? '巡检已提交，并已生成关联工单。'
         : '巡检已提交。'
     )
     router.push({
       path: `/asset/device/detail/${getDeviceId()}`,
       query: {
         anchor: 'inspection',
-        inspectionId: nextRecord.inspections[0]?.id || ''
+        inspectionId: nextRecord.inspections[0]?.id || '',
+        workorderId: createdWorkorderId ? String(createdWorkorderId) : undefined
       }
     })
   } finally {
@@ -389,33 +568,6 @@ watch(
 </script>
 
 <style lang="scss" scoped>
-.summary-block {
-  min-height: 180px;
-}
-
-.summary-block__title,
-.text-secondary,
-.summary-block__hint {
-  color: var(--el-text-color-secondary);
-}
-
-.summary-block__headline {
-  margin-top: 10px;
-  font-size: 20px;
-  font-weight: 700;
-  line-height: 1.4;
-}
-
-.summary-block__text {
-  margin-top: 8px;
-  line-height: 1.7;
-}
-
-.summary-block__hint {
-  margin-top: 10px;
-  line-height: 1.6;
-}
-
 .card-header {
   font-weight: 600;
 }
