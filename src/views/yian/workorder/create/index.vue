@@ -249,7 +249,7 @@ const handleSubmit = async () => {
   submitting.value = true
   try {
     form.creator = currentOperatorName.value
-    const order = YianWorkorderApi.create({
+    YianWorkorderApi.create({
       deviceId: form.deviceId!,
       deviceCode: form.deviceCode,
       deviceName: form.deviceName,
@@ -264,8 +264,8 @@ const handleSubmit = async () => {
       logAttachments: form.logAttachments,
       creator: form.creator
     })
-    message.success('工单已创建，并进入待受理')
-    router.push(`/workorder/detail/${order.id}`)
+    message.success('工单已创建')
+    router.push('/workorder/list')
   } finally {
     submitting.value = false
   }

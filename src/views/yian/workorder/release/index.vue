@@ -240,6 +240,16 @@
               <el-radio label="rejected">驳回并返修</el-radio>
             </el-radio-group>
           </el-form-item>
+          <el-form-item label="风险等级">
+            <el-select v-model="reviewForm.riskLevel" class="!w-100%">
+              <el-option
+                v-for="item in WORKORDER_RISK_OPTIONS"
+                :key="item.value"
+                :label="item.label"
+                :value="item.value"
+              />
+            </el-select>
+          </el-form-item>
           <el-form-item label="限制条件">
             <el-input
               v-model="reviewForm.restrictions"
@@ -287,6 +297,7 @@ import {
   WORKORDER_RISK_OPTIONS,
   YianWorkorderApi,
   type WorkorderReleaseResult,
+  type WorkorderRiskLevel,
   type WorkorderVO
 } from '@/api/yian/workorder'
 
@@ -310,6 +321,7 @@ const batteryRows = ref<AssetBatteryVO[]>([])
 const reviewForm = reactive({
   reviewer: currentOperatorName.value,
   result: 'approved' as WorkorderReleaseResult,
+  riskLevel: 'medium' as WorkorderRiskLevel,
   restrictions: '',
   conclusion: ''
 })
@@ -423,6 +435,9 @@ const openReview = async (row: WorkorderVO) => {
       ? currentOperatorName.value
       : currentOrder.value.release?.reviewer || currentOperatorName.value
   reviewForm.result = currentOrder.value.release?.result || 'approved'
+  reviewForm.riskLevel =
+    currentOrder.value.release?.riskLevel ||
+    (currentOrder.value.riskLevel === 'unrated' ? 'medium' : currentOrder.value.riskLevel)
   reviewForm.restrictions = currentOrder.value.release?.restrictions || ''
   reviewForm.conclusion = currentOrder.value.release?.conclusion || ''
   await loadBatteryRows(currentOrder.value)

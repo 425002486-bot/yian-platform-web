@@ -28,6 +28,9 @@ export interface WorkorderMaterialItem {
   name: string
   spec: string
   quantity: number
+  requestedQuantity?: number
+  pickedQuantity?: number
+  currentInventory?: number
   status: 'picked' | 'pending'
 }
 
@@ -47,8 +50,13 @@ export interface WorkorderAttachmentItem {
 }
 
 export interface WorkorderStageRecordAcceptance {
+  decision: 'accepted' | 'return_for_info'
+  grounded: boolean
+  dispatcher: string
   assignee: string
   priority: WorkorderPriority
+  deadline: string
+  deadlineReason?: string
   remark?: string
   acceptedAt: string
 }
@@ -56,7 +64,10 @@ export interface WorkorderStageRecordAcceptance {
 export interface WorkorderStageRecordDiagnosis {
   engineer: string
   faultCategory: string
+  probableCause: string
   riskLevel: WorkorderRiskLevel
+  groundedSuggestion: boolean
+  needParts: boolean
   conclusion: string
   suggestedParts: string[]
   diagnosedAt: string
@@ -80,6 +91,7 @@ export interface WorkorderStageRecordRepair {
 export interface WorkorderStageRecordInspection {
   inspector: string
   result: 'passed' | 'failed'
+  flightRecord?: string
   conclusion: string
   batteryCheck: boolean
   flightTest: boolean
@@ -89,6 +101,7 @@ export interface WorkorderStageRecordInspection {
 export interface WorkorderStageRecordRelease {
   reviewer: string
   result: WorkorderReleaseResult
+  riskLevel: WorkorderRiskLevel
   conclusion: string
   restrictions?: string
   reviewedAt: string
@@ -299,8 +312,12 @@ const seedOrders = (): WorkorderEntity[] => [
     slaDeadline: '2026-05-14 10:25',
     status: 'diagnosing',
     acceptance: {
+      decision: 'accepted',
+      grounded: true,
+      dispatcher: '调度台',
       assignee: '王工',
       priority: 'P2',
+      deadline: '2026-05-14 10:25',
       remark: '先排查云台减震球与相机排线',
       acceptedAt: '2026-05-13 10:40'
     },
@@ -327,15 +344,22 @@ const seedOrders = (): WorkorderEntity[] => [
     slaDeadline: '2026-05-14 12:00',
     status: 'repairing',
     acceptance: {
+      decision: 'accepted',
+      grounded: true,
+      dispatcher: '调度台',
       assignee: '李工',
       priority: 'P1',
+      deadline: '2026-05-14 12:00',
       remark: '纳入高优工单处理',
       acceptedAt: '2026-05-12 16:40'
     },
     diagnosis: {
       engineer: '李工',
       faultCategory: '动力系统',
+      probableCause: '3 号电机温升异常，疑似电机总成或连接线束受损',
       riskLevel: 'high',
+      groundedSuggestion: true,
+      needParts: true,
       conclusion: '3 号电机温升异常，建议更换电机与连接线并复位飞控。',
       suggestedParts: ['3 号电机总成', '电调连接线'],
       diagnosedAt: '2026-05-12 17:10'
@@ -374,15 +398,22 @@ const seedOrders = (): WorkorderEntity[] => [
     slaDeadline: '2026-05-14 18:00',
     status: 'releasing',
     acceptance: {
+      decision: 'accepted',
+      grounded: true,
+      dispatcher: '调度台',
       assignee: '张工',
       priority: 'P2',
+      deadline: '2026-05-14 18:00',
       remark: '复位飞控并执行全套地面检查',
       acceptedAt: '2026-05-10 09:45'
     },
     diagnosis: {
       engineer: '张工',
       faultCategory: '飞控系统',
+      probableCause: '飞控参数漂移，疑似返航参数异常并伴随桨叶受损',
       riskLevel: 'medium',
+      groundedSuggestion: true,
+      needParts: true,
       conclusion: '飞控参数漂移，需复位并更换受损桨叶。',
       suggestedParts: ['桨叶套装'],
       diagnosedAt: '2026-05-10 10:20'
@@ -654,18 +685,22 @@ export const YianWorkorderApi = {
 
   submitAcceptance(
     id: number,
-    payload: Pick<WorkorderStageRecordAcceptance, 'assignee' | 'priority' | 'remark'>
+    payload: Pick<
+      WorkorderStageRecordAcceptance,
+      'decision' | 'grounded' | 'dispatcher' | 'assignee' | 'priority' | 'deadline' | 'deadlineReason' | 'remark'
+    >
   ) {
     return mutateOrder(id, (draft) => {
-      draft.owner = payload.assignee
+      draft.owner = payload.assignee || payload.dispatcher
+      draft.slaDeadline = payload.deadline
       draft.status = 'diagnosing'
       draft.acceptance = { ...payload, acceptedAt: now() }
       draft.timeline.push(
         createTimeline(
           'diagnosing',
           '完成受理',
-          `工单已分派给${payload.assignee}，优先级${payload.priority}`,
-          payload.assignee
+          `工单已由${payload.dispatcher}受理并分派给${payload.assignee || payload.dispatcher}，优先级${payload.priority}`,
+          payload.dispatcher
         )
       )
     })
@@ -675,18 +710,25 @@ export const YianWorkorderApi = {
     id: number,
     payload: Pick<
       WorkorderStageRecordDiagnosis,
-      'engineer' | 'faultCategory' | 'riskLevel' | 'conclusion' | 'suggestedParts'
+      | 'engineer'
+      | 'faultCategory'
+      | 'probableCause'
+      | 'riskLevel'
+      | 'groundedSuggestion'
+      | 'needParts'
+      | 'conclusion'
+      | 'suggestedParts'
     >
   ) {
     return mutateOrder(id, (draft) => {
       draft.owner = payload.engineer
-      draft.status = 'picking'
+      draft.status = payload.needParts ? 'picking' : 'repairing'
       draft.diagnosis = { ...payload, diagnosedAt: now() }
       draft.timeline.push(
         createTimeline(
-          'picking',
+          payload.needParts ? 'picking' : 'repairing',
           '提交初诊',
-          `确认${payload.faultCategory}异常，风险等级${payload.riskLevel}`,
+          `确认${payload.faultCategory}异常，风险等级${payload.riskLevel}${payload.needParts ? '，进入领料' : '，直接进入维修'}`,
           payload.engineer
         )
       )
@@ -729,7 +771,7 @@ export const YianWorkorderApi = {
     id: number,
     payload: Pick<
       WorkorderStageRecordInspection,
-      'inspector' | 'result' | 'conclusion' | 'batteryCheck' | 'flightTest'
+      'inspector' | 'result' | 'flightRecord' | 'conclusion' | 'batteryCheck' | 'flightTest'
     >
   ) {
     return mutateOrder(id, (draft) => {
@@ -751,10 +793,14 @@ export const YianWorkorderApi = {
 
   submitRelease(
     id: number,
-    payload: Pick<WorkorderStageRecordRelease, 'reviewer' | 'result' | 'conclusion' | 'restrictions'>
+    payload: Pick<
+      WorkorderStageRecordRelease,
+      'reviewer' | 'result' | 'riskLevel' | 'conclusion' | 'restrictions'
+    >
   ) {
     return mutateOrder(id, (draft) => {
       draft.owner = payload.reviewer
+      draft.riskLevel = payload.riskLevel
       draft.release = { ...payload, reviewedAt: now() }
       if (payload.result === 'rejected') {
         draft.status = 'repairing'

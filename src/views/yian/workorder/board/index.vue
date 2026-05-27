@@ -105,6 +105,7 @@ import {
 defineOptions({ name: 'WorkorderBoard' })
 
 const router = useRouter()
+const hasMounted = ref(false)
 
 const queryParams = reactive({
   siteName: '',
@@ -148,6 +149,14 @@ watch(
 )
 
 onMounted(() => {
+  loadData()
+  hasMounted.value = true
+})
+
+onActivated(() => {
+  if (!hasMounted.value) {
+    return
+  }
   loadData()
 })
 </script>

@@ -128,4 +128,8 @@ const handleDetail = (id: number) => {
 onMounted(() => {
   getList()
 })
+
+onActivated(() => {
+  getList()
+})
 </script>

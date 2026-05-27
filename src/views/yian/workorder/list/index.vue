@@ -1,35 +1,6 @@
 <template>
   <ContentWrap>
     <div class="yian-prototype-page yian-workorder-list-page">
-      <section class="yian-prototype-summary">
-        <article class="yian-prototype-stat">
-          <strong class="yian-prototype-stat__label">进行中工单</strong>
-          <span class="yian-prototype-stat__value">{{ tabCounts.running }}</span>
-          <p class="yian-prototype-stat__desc">受理、诊断、维修、复检与放行全流程在途任务</p>
-        </article>
-        <article class="yian-prototype-stat">
-          <strong class="yian-prototype-stat__label">待放行审核</strong>
-          <span class="yian-prototype-stat__value yian-prototype-stat__value--primary">
-            {{ releasingCount }}
-          </span>
-          <p class="yian-prototype-stat__desc">需复核复检结论、电池状态和放行限制条件</p>
-        </article>
-        <article class="yian-prototype-stat">
-          <strong class="yian-prototype-stat__label">超时工单</strong>
-          <span class="yian-prototype-stat__value yian-prototype-stat__value--danger">
-            {{ overdueCount }}
-          </span>
-          <p class="yian-prototype-stat__desc">已超过当前 SLA 节点截止时间的工单数量</p>
-        </article>
-        <article class="yian-prototype-stat">
-          <strong class="yian-prototype-stat__label">已闭环工单</strong>
-          <span class="yian-prototype-stat__value yian-prototype-stat__value--warning">
-            {{ tabCounts.completed + tabCounts.closed }}
-          </span>
-          <p class="yian-prototype-stat__desc">已完成或已关闭的工单数量</p>
-        </article>
-      </section>
-
       <section class="yian-prototype-filter">
         <el-form :model="queryParams" :inline="true">
           <el-form-item label="搜索">
@@ -94,7 +65,6 @@
       </section>
 
       <section class="yian-prototype-toolbar">
-        <el-button @click="router.push('/workorder/board')">工单看板</el-button>
         <el-button type="primary" @click="router.push('/workorder/create')">新建工单</el-button>
       </section>
 
@@ -176,6 +146,7 @@ const router = useRouter()
 const route = useRoute()
 
 const activeTab = ref<'running' | 'completed' | 'closed'>('running')
+const hasMounted = ref(false)
 const queryParams = reactive({
   keyword: '',
   status: '' as WorkorderVO['status'] | '',
@@ -200,12 +171,6 @@ const tabCounts = computed(() => ({
   closed: allFilteredOrders.value.filter((item) => item.status === 'closed').length
 }))
 
-const releasingCount = computed(
-  () => allFilteredOrders.value.filter((item) => item.status === 'releasing').length
-)
-
-const overdueCount = computed(() => allFilteredOrders.value.filter((item) => item.overdue).length)
-
 const loadData = () => {
   workorderList.value = YianWorkorderApi.getList({
     ...baseQuery.value,
@@ -226,11 +191,12 @@ const getCurrentNodeActionLabel = (row: WorkorderVO) => {
 }
 
 const handleCurrentNodeAction = (row: WorkorderVO) => {
-  if (row.status === 'releasing') {
-    router.push(`/workorder/release?orderId=${row.id}`)
-    return
-  }
-  router.push(`/workorder/detail/${row.id}`)
+  router.push({
+    path: `/workorder/detail/${row.id}`,
+    query: {
+      stage: row.status
+    }
+  })
 }
 
 const resetQuery = () => {
@@ -260,6 +226,15 @@ watch(
 )
 
 onMounted(() => {
+  syncQueryFromRoute()
+  loadData()
+  hasMounted.value = true
+})
+
+onActivated(() => {
+  if (!hasMounted.value) {
+    return
+  }
   syncQueryFromRoute()
   loadData()
 })

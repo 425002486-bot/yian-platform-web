@@ -133,16 +133,6 @@ const buildMockMenus = () => [
         visible: true,
         keepAlive: true,
         parentId: 3
-      },
-      {
-        name: '放行审核',
-        path: 'release',
-        component: 'yian/workorder/release/index',
-        componentName: 'YianWorkorderRelease',
-        icon: 'ep:checked',
-        visible: true,
-        keepAlive: true,
-        parentId: 3
       }
     ]
   },
