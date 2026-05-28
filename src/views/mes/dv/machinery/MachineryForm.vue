@@ -57,7 +57,19 @@
         </el-col>
         <el-col :span="8">
           <el-form-item label="责任人" prop="ownerName">
-            <el-input v-model="formData.ownerName" placeholder="请输入责任人" />
+            <el-select
+              v-model="formData.ownerName"
+              placeholder="请选择责任人"
+              filterable
+              class="!w-1/1"
+            >
+              <el-option
+                v-for="item in ownerOptions"
+                :key="`${item.stationName}-${item.userId}`"
+                :label="item.label"
+                :value="item.value"
+              />
+            </el-select>
           </el-form-item>
         </el-col>
       </el-row>
@@ -170,6 +182,8 @@ import {
   saveAssetDeviceMasterRecord,
   type AssetDeviceEnableStatus
 } from '@/api/yian/asset/deviceMaster'
+import { getPersonnelPage, type PersonnelVO } from '@/api/yian/config/personnel'
+import { buildPersonnelOptions } from '@/utils/yian/personnel'
 import DvMachineryTypeSelect from '@/views/mes/dv/machinery/type/components/DvMachineryTypeSelect.vue'
 import { MesAutoCodeRuleCode } from '@/views/mes/utils/constants'
 import { AutoCodeRecordApi } from '@/api/mes/md/autocode/record'
@@ -215,6 +229,7 @@ const dialogTitle = computed(() => {
 
 const formRef = ref()
 const workshopOptions = ref<MdWorkshopVO[]>([])
+const personnelOptions = ref<PersonnelVO[]>([])
 const batteryOptions = computed(() => listDeviceBatteryOptions())
 const previousCode = ref('')
 const documentCount = ref(0)
@@ -242,6 +257,9 @@ const formData = ref<MachineryFormData>(createDefaultFormData())
 const showStandardBatteryField = computed(
   () => formData.value.machineryTypeName === AIRCRAFT_MACHINERY_TYPE_NAME
 )
+const ownerOptions = computed(() =>
+  buildPersonnelOptions(personnelOptions.value, formData.value.workshopName, ['site_lead'], ['ops_staff'])
+)
 
 const normalizeIdentityValue = (value?: string) => String(value || '').trim().toUpperCase()
 
@@ -251,7 +269,7 @@ const formRules = reactive({
   name: [{ required: true, message: '设备名称不能为空', trigger: 'blur' }],
   machineryTypeId: [{ required: true, message: '设备类型不能为空', trigger: 'change' }],
   workshopId: [{ required: true, message: '所属站点不能为空', trigger: 'change' }],
-  ownerName: [{ required: true, message: '责任人不能为空', trigger: 'blur' }],
+  ownerName: [{ required: true, message: '责任人不能为空', trigger: 'change' }],
   enableStatus: [{ required: true, message: '启用状态不能为空', trigger: 'change' }]
 })
 
@@ -259,11 +277,24 @@ const loadWorkshopOptions = async () => {
   workshopOptions.value = await MdWorkshopApi.getWorkshopSimpleList()
 }
 
-const syncWorkshopMeta = () => {
+const loadPersonnelOptions = async () => {
+  try {
+    const data = await getPersonnelPage({ pageNo: 1, pageSize: 200 })
+    personnelOptions.value = data.list || []
+  } catch {
+    personnelOptions.value = []
+  }
+}
+
+const syncWorkshopMeta = (preferDefaultOwner = false) => {
   const current = workshopOptions.value.find((item) => item.id === formData.value.workshopId)
   formData.value.workshopName = current?.name || ''
-  if (!formData.value.ownerName && current?.chargeUserName) {
-    formData.value.ownerName = current.chargeUserName
+  if (!preferDefaultOwner) {
+    return
+  }
+  const defaultOwner = ownerOptions.value[0]?.value || current?.chargeUserName || ''
+  if (defaultOwner) {
+    formData.value.ownerName = defaultOwner
   }
 }
 
@@ -274,7 +305,7 @@ const handleMachineryTypeChange = (item?: DvMachineryTypeVO) => {
 watch(
   () => formData.value.workshopId,
   () => {
-    syncWorkshopMeta()
+    syncWorkshopMeta(formType.value === 'create')
   }
 )
 
@@ -338,7 +369,7 @@ const open = async (type: 'create' | 'update' | 'detail', id?: number) => {
   dialogVisible.value = true
   formType.value = type
   resetForm()
-  await loadWorkshopOptions()
+  await Promise.all([loadWorkshopOptions(), loadPersonnelOptions()])
   if (!id) return
   formLoading.value = true
   try {

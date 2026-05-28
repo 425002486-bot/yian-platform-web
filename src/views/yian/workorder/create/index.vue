@@ -101,7 +101,14 @@
         </el-form-item>
 
         <el-form-item label="提交人" prop="creator">
-          <el-input v-model="form.creator" disabled />
+          <el-select v-model="form.creator" filterable placeholder="请选择提交人" class="!w-100%">
+            <el-option
+              v-for="item in creatorOptions"
+              :key="`${item.stationName}-${item.userId}`"
+              :label="item.label"
+              :value="item.value"
+            />
+          </el-select>
         </el-form-item>
 
         <el-form-item>
@@ -120,6 +127,7 @@ import type { FormInstance, FormRules, UploadFile, UploadFiles, UploadUserFile }
 import { ContentWrap } from '@/components/ContentWrap'
 import { DvMachineryApi, type DvMachineryVO } from '@/api/mes/dv/machinery'
 import { resolveAssetDeviceMasterRecord } from '@/api/yian/asset/deviceMaster'
+import { getPersonnelPage, type PersonnelVO } from '@/api/yian/config/personnel'
 import { useUserStoreWithOut } from '@/store/modules/user'
 import {
   WORKORDER_SOURCE_OPTIONS,
@@ -127,6 +135,7 @@ import {
   type WorkorderAttachmentItem,
   type WorkorderSource
 } from '@/api/yian/workorder'
+import { buildPersonnelOptions } from '@/utils/yian/personnel'
 
 defineOptions({ name: 'WorkorderCreate' })
 
@@ -142,6 +151,7 @@ const formRef = ref<FormInstance>()
 const submitting = ref(false)
 const deviceLoading = ref(false)
 const deviceOptions = ref<DeviceOption[]>([])
+const personnelOptions = ref<PersonnelVO[]>([])
 const imageUploadList = ref<UploadUserFile[]>([])
 const logUploadList = ref<UploadUserFile[]>([])
 const currentOperatorName = computed(() => userStore.getUser.nickname || '当前账号')
@@ -151,6 +161,7 @@ const form = reactive({
   deviceCode: '',
   deviceName: '',
   siteName: '',
+  owner: '',
   source: '' as WorkorderSource | '',
   faultTime: '',
   reporterPhone: '',
@@ -162,12 +173,23 @@ const form = reactive({
   creator: currentOperatorName.value
 })
 
+const defaultOwnerOptions = computed(() =>
+  buildPersonnelOptions(personnelOptions.value, form.siteName, ['site_lead'], ['ops_staff'])
+)
+const creatorOptions = computed(() =>
+  buildPersonnelOptions(
+    personnelOptions.value,
+    form.siteName,
+    ['site_lead', 'ops_staff', 'inspector', 'parts_manager', 'release_approver', 'auditor']
+  )
+)
+
 const rules: FormRules = {
   deviceId: [{ required: true, message: '请选择关联设备', trigger: 'change' }],
   source: [{ required: true, message: '请选择报修来源', trigger: 'change' }],
   faultTime: [{ required: true, message: '请选择异常时间', trigger: 'change' }],
   symptom: [{ required: true, message: '请填写异常现象', trigger: 'blur' }],
-  creator: [{ required: true, message: '请填写提交人', trigger: 'blur' }]
+  creator: [{ required: true, message: '请选择提交人', trigger: 'change' }]
 }
 
 const fallbackDevices: DeviceOption[] = [
@@ -196,6 +218,23 @@ const toUploadUserFiles = (files: UploadFiles) =>
 const syncAttachments = (files: UploadFiles, type: WorkorderAttachmentItem['type']) =>
   files.map((item) => toAttachmentMeta(item, type))
 
+const loadPersonnelOptions = async () => {
+  try {
+    const data = await getPersonnelPage({ pageNo: 1, pageSize: 200 })
+    personnelOptions.value = data.list || []
+  } catch {
+    personnelOptions.value = []
+  }
+}
+
+const syncDefaultOwner = () => {
+  form.owner = defaultOwnerOptions.value[0]?.value || ''
+}
+
+const syncDefaultCreator = () => {
+  form.creator = creatorOptions.value[0]?.value || currentOperatorName.value
+}
+
 const loadDevices = async () => {
   deviceLoading.value = true
   try {
@@ -219,6 +258,8 @@ const handleDeviceChange = (deviceId?: number) => {
   form.deviceCode = target?.code || ''
   form.deviceName = target?.name || ''
   form.siteName = target?.siteName || ''
+  syncDefaultOwner()
+  syncDefaultCreator()
 }
 
 const handleImageChange = (_file: UploadFile, files: UploadFiles) => {
@@ -248,12 +289,15 @@ const handleSubmit = async () => {
   }
   submitting.value = true
   try {
-    form.creator = currentOperatorName.value
+    if (!form.creator) {
+      syncDefaultCreator()
+    }
     YianWorkorderApi.create({
       deviceId: form.deviceId!,
       deviceCode: form.deviceCode,
       deviceName: form.deviceName,
       siteName: form.siteName,
+      owner: form.owner || undefined,
       source: form.source as WorkorderSource,
       faultTime: form.faultTime,
       reporterPhone: form.reporterPhone,
@@ -275,8 +319,9 @@ onMounted(async () => {
   if (!userStore.getIsSetUser) {
     await userStore.setUserInfoAction()
   }
-  form.creator = currentOperatorName.value
-  loadDevices()
+  await Promise.all([loadDevices(), loadPersonnelOptions()])
+  syncDefaultCreator()
+  syncDefaultOwner()
 })
 </script>
 

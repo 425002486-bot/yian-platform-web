@@ -5,10 +5,9 @@
       type="info"
       :closable="false"
       class="mb-16px"
-      description="以下为系统预定义的业务角色及权限矩阵。MVP 阶段角色不可自定义，人员角色在「人员管理」中分配。"
+      description="以下为系统预定义的业务角色和权限矩阵。人员角色请在“人员管理”中分配，业务菜单与页面操作会按这里的权限联动控制。"
     />
 
-    <!-- 角色卡片概览 -->
     <div class="grid grid-cols-3 gap-12px mb-20px">
       <el-card v-for="role in roleList" :key="role.code" shadow="hover" class="role-card">
         <div class="flex justify-between items-center mb-8px">
@@ -19,7 +18,6 @@
       </el-card>
     </div>
 
-    <!-- 权限矩阵表格 -->
     <h3 class="mb-12px">权限矩阵</h3>
     <el-table v-loading="loading" :data="roleList" stripe border>
       <el-table-column label="角色" prop="name" width="130" fixed="left" />
@@ -52,8 +50,8 @@
 
     <div class="mt-16px text-gray-400 text-sm">
       <span class="mr-16px"><el-tag type="success" size="small">可执行</el-tag> 可发起和操作</span>
-      <span class="mr-16px"><el-tag type="info" size="small">查看</el-tag> 只能查看</span>
-      <span><el-tag type="danger" size="small">无</el-tag> 不可见</span>
+      <span class="mr-16px"><el-tag type="info" size="small">查看</el-tag> 仅可查看</span>
+      <span><el-tag type="danger" size="small">无</el-tag> 不可访问</span>
     </div>
   </ContentWrap>
 </template>
@@ -65,7 +63,12 @@ import { getRoleSummary } from '@/api/yian/config/personnel'
 defineOptions({ name: 'ConfigRole' })
 
 const PermTag = defineComponent({
-  props: { level: { type: String, default: 'none' } },
+  props: {
+    level: {
+      type: String,
+      default: 'none'
+    }
+  },
   setup(props) {
     const map: Record<string, { label: string; type: string }> = {
       exec: { label: '可执行', type: 'success' },
@@ -73,8 +76,8 @@ const PermTag = defineComponent({
       none: { label: '无', type: 'danger' }
     }
     return () => {
-      const cfg = map[props.level] || map.none
-      return h(resolveComponent('el-tag'), { type: cfg.type, size: 'small' }, () => cfg.label)
+      const config = map[props.level] || map.none
+      return h(resolveComponent('el-tag'), { type: config.type, size: 'small' }, () => config.label)
     }
   }
 })

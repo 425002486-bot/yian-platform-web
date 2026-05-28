@@ -18,12 +18,7 @@
       </el-form-item>
       <el-form-item label="站点">
         <el-select v-model="query.workshopId" placeholder="全部" clearable class="!w-180px">
-          <el-option
-            v-for="site in siteOptions"
-            :key="site.id"
-            :label="site.name"
-            :value="site.id"
-          />
+          <el-option v-for="site in siteOptions" :key="site.id" :label="site.name" :value="site.id" />
         </el-select>
       </el-form-item>
       <el-form-item>
@@ -39,11 +34,11 @@
     </el-form>
 
     <div class="mb-16px flex flex-wrap gap-12px">
-      <el-button type="primary" @click="handleCreate">
+      <el-button v-if="canManageBattery" type="primary" @click="handleCreate">
         <Icon icon="ep:plus" class="mr-4px" />
         单个录入
       </el-button>
-      <el-button @click="handleImport">
+      <el-button v-if="canManageBattery" @click="handleImport">
         <Icon icon="ep:upload" class="mr-4px" />
         批量上传
       </el-button>
@@ -68,13 +63,10 @@
         </template>
       </el-table-column>
 
-      <el-table-column label="健康分" min-width="180">
+      <el-table-column label="健康级别" min-width="180">
         <template #default="{ row }">
           <div class="cell-stack">
-            <span
-              class="battery-score"
-              :class="getScoreClass(batteryProfiles[row.batteryCode]?.healthScore)"
-            >
+            <span class="battery-score" :class="getScoreClass(batteryProfiles[row.batteryCode]?.healthScore)">
               {{ batteryProfiles[row.batteryCode]?.healthScoreLabel || '-' }}
             </span>
             <span class="text-12px text-[#909399]">
@@ -118,7 +110,9 @@
       <el-table-column label="操作" width="180" fixed="right">
         <template #default="{ row }">
           <el-button link type="primary" @click="openDetail(row.id)">电池详情</el-button>
-          <el-button link type="primary" @click="startInspection(row.id)">巡检</el-button>
+          <el-button v-if="canInspectBattery" link type="primary" @click="startInspection(row.id)">
+            巡检
+          </el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -128,12 +122,13 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onActivated, onMounted, reactive, ref } from 'vue'
 import { ContentWrap } from '@/components/ContentWrap'
 import { YianAssetApi, type AssetBatteryVO } from '@/api/yian/asset/backend'
 import { resolveAssetBatteryProfile } from '@/api/yian/asset'
 import BatteryForm from '@/views/yian/asset/battery/BatteryForm.vue'
 import { useCache } from '@/hooks/web/useCache'
+import { getCurrentYianAccess, hasYianPermission } from '@/utils/yian/access'
 
 defineOptions({ name: 'AssetBattery' })
 
@@ -143,6 +138,9 @@ const { wsCache } = useCache()
 const LAST_BATTERY_DETAIL_ID_KEY = 'yian_asset_last_battery_detail_id'
 
 const loading = ref(false)
+const hasMounted = ref(false)
+const canManageBattery = ref(false)
+const canInspectBattery = ref(false)
 const batteryList = ref<AssetBatteryVO[]>([])
 const query = reactive({
   keyword: '',
@@ -237,7 +235,18 @@ const getScoreClass = (score?: number) => {
   return 'battery-score--risk'
 }
 
-onMounted(() => {
+onMounted(async () => {
+  const access = await getCurrentYianAccess()
+  canManageBattery.value = hasYianPermission(access, 'asset', 'exec')
+  canInspectBattery.value = hasYianPermission(access, 'inspect', 'exec')
+  await getList()
+  hasMounted.value = true
+})
+
+onActivated(() => {
+  if (!hasMounted.value) {
+    return
+  }
   getList()
 })
 </script>

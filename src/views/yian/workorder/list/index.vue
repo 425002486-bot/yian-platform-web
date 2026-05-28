@@ -13,12 +13,7 @@
             />
           </el-form-item>
           <el-form-item label="状态">
-            <el-select
-              v-model="queryParams.status"
-              placeholder="全部状态"
-              clearable
-              class="!w-150px"
-            >
+            <el-select v-model="queryParams.status" placeholder="全部状态" clearable class="!w-150px">
               <el-option
                 v-for="item in WORKORDER_STAGE_OPTIONS"
                 :key="item.value"
@@ -28,12 +23,7 @@
             </el-select>
           </el-form-item>
           <el-form-item label="来源">
-            <el-select
-              v-model="queryParams.source"
-              placeholder="全部来源"
-              clearable
-              class="!w-150px"
-            >
+            <el-select v-model="queryParams.source" placeholder="全部来源" clearable class="!w-150px">
               <el-option
                 v-for="item in WORKORDER_SOURCE_OPTIONS"
                 :key="item.value"
@@ -65,7 +55,9 @@
       </section>
 
       <section class="yian-prototype-toolbar">
-        <el-button type="primary" @click="router.push('/workorder/create')">新建工单</el-button>
+        <el-button v-if="canCreateWorkorder" type="primary" @click="router.push('/workorder/create')">
+          新建工单
+        </el-button>
       </section>
 
       <section class="yian-prototype-panel">
@@ -139,6 +131,7 @@ import {
   type WorkorderListQuery,
   type WorkorderVO
 } from '@/api/yian/workorder'
+import { getCurrentYianAccess, hasYianPermission } from '@/utils/yian/access'
 
 defineOptions({ name: 'WorkorderList' })
 
@@ -147,6 +140,8 @@ const route = useRoute()
 
 const activeTab = ref<'running' | 'completed' | 'closed'>('running')
 const hasMounted = ref(false)
+const canCreateWorkorder = ref(false)
+const currentAccess = ref<Awaited<ReturnType<typeof getCurrentYianAccess>> | null>(null)
 const queryParams = reactive({
   keyword: '',
   status: '' as WorkorderVO['status'] | '',
@@ -178,7 +173,33 @@ const loadData = () => {
   })
 }
 
+const canExecuteStage = (status: WorkorderVO['status']) => {
+  const access = currentAccess.value
+  if (!access) {
+    return false
+  }
+  if (status === 'pending') {
+    return hasYianPermission(access, 'intake', 'exec')
+  }
+  if (status === 'diagnosing' || status === 'repairing') {
+    return hasYianPermission(access, 'repair', 'exec')
+  }
+  if (status === 'picking') {
+    return hasYianPermission(access, 'parts', 'exec')
+  }
+  if (status === 'inspecting') {
+    return hasYianPermission(access, 'inspect', 'exec')
+  }
+  if (status === 'releasing') {
+    return hasYianPermission(access, 'release', 'exec')
+  }
+  return false
+}
+
 const getCurrentNodeActionLabel = (row: WorkorderVO) => {
+  if (!canExecuteStage(row.status)) {
+    return ''
+  }
   const actionMap: Partial<Record<WorkorderVO['status'], string>> = {
     pending: '去受理',
     diagnosing: '去初诊',
@@ -191,6 +212,9 @@ const getCurrentNodeActionLabel = (row: WorkorderVO) => {
 }
 
 const handleCurrentNodeAction = (row: WorkorderVO) => {
+  if (!canExecuteStage(row.status)) {
+    return
+  }
   router.push({
     path: `/workorder/detail/${row.id}`,
     query: {
@@ -225,7 +249,9 @@ watch(
   }
 )
 
-onMounted(() => {
+onMounted(async () => {
+  currentAccess.value = await getCurrentYianAccess()
+  canCreateWorkorder.value = hasYianPermission(currentAccess.value, 'intake', 'exec')
   syncQueryFromRoute()
   loadData()
   hasMounted.value = true

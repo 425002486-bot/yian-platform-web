@@ -15,6 +15,18 @@ export interface PersonnelVO {
   createTime: string
 }
 
+export type YianPermissionLevel = 'exec' | 'view' | 'none'
+
+export interface YianCurrentAccessVO {
+  userId: number | null
+  userName: string | null
+  bizRole: string | null
+  bizRoleLabel: string | null
+  stationId: number | null
+  stationName: string | null
+  permissions: Record<string, YianPermissionLevel>
+}
+
 export const getPersonnelPage = (params: any) => {
   return request.get({ url: '/mes/config/personnel/page', params })
 }
@@ -42,4 +54,8 @@ export const getBizRoles = () => {
 // 角色概览（含人数和权限矩阵）
 export const getRoleSummary = () => {
   return request.get({ url: '/mes/config/personnel/role-summary' })
+}
+
+export const getCurrentAccess = () => {
+  return request.get<YianCurrentAccessVO>({ url: '/mes/config/personnel/current-access' })
 }

@@ -59,11 +59,11 @@
       </section>
 
       <section class="yian-prototype-toolbar">
-        <el-button type="primary" @click="handleCreate">
+        <el-button v-if="canManageAsset" type="primary" @click="handleCreate">
           <Icon icon="ep:plus" class="mr-4px" />
           单个录入
         </el-button>
-        <el-button @click="handleImport">
+        <el-button v-if="canManageAsset" @click="handleImport">
           <Icon icon="ep:upload" class="mr-4px" />
           批量导入
         </el-button>
@@ -136,7 +136,7 @@
           <el-table-column label="操作" width="220" fixed="right">
             <template #default="{ row }">
               <el-button link type="primary" @click="handleDetail(row.id)">设备详情</el-button>
-              <el-button link type="primary" @click="handleInspectionRecord(row)">
+              <el-button v-if="canInspectAsset" link type="primary" @click="handleInspectionRecord(row)">
                 巡检
               </el-button>
               <el-button
@@ -181,6 +181,7 @@ import {
 import { formatDate } from '@/utils/formatTime'
 import download from '@/utils/download'
 import MachineryForm from '@/views/mes/dv/machinery/MachineryForm.vue'
+import { getCurrentYianAccess, hasYianPermission } from '@/utils/yian/access'
 
 defineOptions({ name: 'AssetDevice' })
 
@@ -195,6 +196,8 @@ const router = useRouter()
 
 const loading = ref(false)
 const exportLoading = ref(false)
+const canManageAsset = ref(false)
+const canInspectAsset = ref(false)
 const deviceList = ref<DvMachineryVO[]>([])
 const queryFormRef = ref()
 const formRef = ref()
@@ -366,7 +369,10 @@ const formatBatterySummary = (row: AssetDeviceRow) => {
 
 const noop = () => undefined
 
-onMounted(() => {
+onMounted(async () => {
+  const access = await getCurrentYianAccess()
+  canManageAsset.value = hasYianPermission(access, 'asset', 'exec')
+  canInspectAsset.value = hasYianPermission(access, 'inspect', 'exec')
   getList()
 })
 </script>

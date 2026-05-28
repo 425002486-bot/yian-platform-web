@@ -18,8 +18,10 @@
     </el-form>
 
     <div class="mb-16px">
-      <el-button type="primary" @click="$router.push('/inventory/inbound')">入库登记</el-button>
-      <el-button @click="$router.push('/inventory/import')">批量导入</el-button>
+      <el-button v-if="canManageParts" type="primary" @click="$router.push('/inventory/inbound')">
+        入库登记
+      </el-button>
+      <el-button v-if="canManageParts" @click="$router.push('/inventory/import')">批量导入</el-button>
     </div>
 
     <el-table v-loading="loading" :data="filteredList" stripe>
@@ -52,7 +54,6 @@
       </el-table-column>
     </el-table>
 
-    <!-- 分页 -->
     <el-pagination
       v-if="total > 0"
       v-model:current-page="queryParams.pageNo"
@@ -70,12 +71,14 @@
 <script lang="ts" setup>
 import { ContentWrap } from '@/components/ContentWrap'
 import { getMaterialStockPage, type MaterialStockVO } from '@/api/yian/inventory'
+import { getCurrentYianAccess, hasYianPermission } from '@/utils/yian/access'
 
 defineOptions({ name: 'InventoryStock' })
 
 const { push } = useRouter()
 
 const loading = ref(false)
+const canManageParts = ref(false)
 const stockList = ref<MaterialStockVO[]>([])
 const total = ref(0)
 const stockStatus = ref<string>()
@@ -87,7 +90,6 @@ const queryParams = reactive({
   virtualFilter: 'exclude' as string | undefined
 })
 
-// 前端按库存状态过滤（因为状态是根据 quantity 和 minStock 计算的）
 const filteredList = computed(() => {
   if (!stockStatus.value) return stockList.value
   return stockList.value.filter((row) => {
@@ -125,8 +127,10 @@ const handleDetail = (id: number) => {
   push({ path: '/inventory/stock/detail', query: { id } })
 }
 
-onMounted(() => {
-  getList()
+onMounted(async () => {
+  const access = await getCurrentYianAccess()
+  canManageParts.value = hasYianPermission(access, 'parts', 'exec')
+  await getList()
 })
 
 onActivated(() => {

@@ -231,7 +231,14 @@
           label-width="110px"
         >
           <el-form-item label="审核人">
-            <el-input v-model="reviewForm.reviewer" disabled />
+            <el-select v-model="reviewForm.reviewer" filterable placeholder="选择放行审核人" class="!w-100%">
+              <el-option
+                v-for="item in reviewerOptions"
+                :key="`${item.stationName}-${item.userId}`"
+                :label="item.label"
+                :value="item.value"
+              />
+            </el-select>
           </el-form-item>
           <el-form-item label="放行结论">
             <el-radio-group v-model="reviewForm.result">
@@ -287,6 +294,7 @@
 
 <script lang="ts" setup>
 import { ContentWrap } from '@/components/ContentWrap'
+import { getPersonnelPage, type PersonnelVO } from '@/api/yian/config/personnel'
 import { useUserStoreWithOut } from '@/store/modules/user'
 import { DvMachineryApi } from '@/api/mes/dv/machinery'
 import { listAssetBattery, type AssetBatteryVO } from '@/api/yian/asset'
@@ -300,6 +308,7 @@ import {
   type WorkorderRiskLevel,
   type WorkorderVO
 } from '@/api/yian/workorder'
+import { buildPersonnelOptions } from '@/utils/yian/personnel'
 
 defineOptions({ name: 'WorkorderRelease' })
 
@@ -308,6 +317,7 @@ const route = useRoute()
 const message = useMessage()
 const userStore = useUserStoreWithOut()
 const currentOperatorName = computed(() => userStore.getUser.nickname || '当前账号')
+const personnelOptions = ref<PersonnelVO[]>([])
 
 const queryParams = reactive({
   status: '' as WorkorderReleaseResult | '',
@@ -325,6 +335,9 @@ const reviewForm = reactive({
   restrictions: '',
   conclusion: ''
 })
+const reviewerOptions = computed(() =>
+  buildPersonnelOptions(personnelOptions.value, currentOrder.value?.siteName || '', ['release_approver'])
+)
 
 const releaseTagType = (status: WorkorderReleaseResult) => RELEASE_META[status].tagType
 const releaseLabel = (status: WorkorderReleaseResult) => RELEASE_META[status].label
@@ -393,11 +406,23 @@ const riskRuleHint = computed(() => {
   return '请先完成初诊定级，再进行放行判断。'
 })
 
+const loadPersonnelOptions = async () => {
+  try {
+    const data = await getPersonnelPage({ pageNo: 1, pageSize: 200 })
+    personnelOptions.value = data.list || []
+  } catch {
+    personnelOptions.value = []
+  }
+}
+
+const syncDefaultReviewer = () => {
+  reviewForm.reviewer = reviewerOptions.value[0]?.value || currentOperatorName.value
+}
+
 const ensureCurrentOperator = async () => {
   if (!userStore.getIsSetUser) {
     await userStore.setUserInfoAction()
   }
-  reviewForm.reviewer = currentOperatorName.value
 }
 
 const loadData = () => {
@@ -430,10 +455,11 @@ const loadBatteryRows = async (order: WorkorderVO) => {
 const openReview = async (row: WorkorderVO) => {
   currentOrder.value = YianWorkorderApi.getDetail(row.id)
   await ensureCurrentOperator()
+  await loadPersonnelOptions()
   reviewForm.reviewer =
     currentOrder.value.status === 'releasing'
-      ? currentOperatorName.value
-      : currentOrder.value.release?.reviewer || currentOperatorName.value
+      ? reviewerOptions.value[0]?.value || currentOperatorName.value
+      : currentOrder.value.release?.reviewer || reviewerOptions.value[0]?.value || currentOperatorName.value
   reviewForm.result = currentOrder.value.release?.result || 'approved'
   reviewForm.riskLevel =
     currentOrder.value.release?.riskLevel ||
@@ -456,7 +482,6 @@ const submitReview = () => {
     message.warning('请完整填写放行审核信息')
     return
   }
-  reviewForm.reviewer = currentOperatorName.value
   if (reviewForm.result === 'limited' && !reviewForm.restrictions) {
     message.warning('限飞放行时请填写限制条件')
     return
@@ -470,6 +495,7 @@ const submitReview = () => {
 onMounted(async () => {
   const orderId = Number(route.query.orderId)
   await ensureCurrentOperator()
+  await loadPersonnelOptions()
   loadData()
   if (orderId) {
     const target = releaseList.value.find((item) => item.id === orderId)

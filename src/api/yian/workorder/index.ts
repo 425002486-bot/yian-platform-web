@@ -166,6 +166,7 @@ export interface WorkorderCreateReqVO {
   deviceCode: string
   deviceName: string
   siteName?: string
+  owner?: string
   source: WorkorderSource
   faultTime: string
   taskScene?: string
@@ -648,7 +649,7 @@ export const YianWorkorderApi = {
       reporterPhone: data.reporterPhone,
       imageAttachments: data.imageAttachments,
       logAttachments: data.logAttachments,
-      owner: '待分派',
+      owner: data.owner || '待分派',
       creator: data.creator,
       createTime: now(),
       slaDeadline: dayjs().add(1, 'day').format('YYYY-MM-DD HH:mm'),

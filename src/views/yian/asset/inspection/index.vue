@@ -43,7 +43,7 @@
       </section>
 
       <section class="yian-prototype-toolbar">
-        <el-button type="primary" @click="openCreateDialog">
+        <el-button v-if="canCreateInspection" type="primary" @click="openCreateDialog">
           <Icon icon="ep:plus" class="mr-4px" />
           发起设备巡检
         </el-button>
@@ -171,6 +171,7 @@ import {
   resolveAssetDeviceMasterRecord,
   type AssetDeviceInspectionRecordVO
 } from '@/api/yian/asset/deviceMaster'
+import { getCurrentYianAccess, hasYianPermission } from '@/utils/yian/access'
 
 defineOptions({ name: 'AssetInspectionIndex' })
 
@@ -217,6 +218,7 @@ const route = useRoute()
 const message = useMessage()
 
 const loading = ref(false)
+const canCreateInspection = ref(false)
 const queryFormRef = ref()
 const deviceList = ref<DvMachineryVO[]>([])
 const batteryList = ref<AssetBatteryVO[]>([])
@@ -493,7 +495,9 @@ watch(
   }
 )
 
-onMounted(() => {
+onMounted(async () => {
+  const access = await getCurrentYianAccess()
+  canCreateInspection.value = hasYianPermission(access, 'inspect', 'exec')
   getList()
 })
 </script>

@@ -54,7 +54,19 @@
             </el-col>
             <el-col :xs="24" :md="12">
               <el-form-item label="巡检人" prop="inspector">
-                <el-input v-model="inspectionForm.inspector" disabled />
+                <el-select
+                  v-model="inspectionForm.inspector"
+                  filterable
+                  placeholder="请选择巡检人"
+                  class="!w-1/1"
+                >
+                  <el-option
+                    v-for="item in inspectorOptions"
+                    :key="`${item.stationName}-${item.userId}`"
+                    :label="item.label"
+                    :value="item.value"
+                  />
+                </el-select>
               </el-form-item>
             </el-col>
           </el-row>
@@ -227,12 +239,14 @@ import dayjs from 'dayjs'
 import type { UploadUserFile } from 'element-plus'
 import { ContentWrap } from '@/components/ContentWrap'
 import { YianAssetApi, type AssetBatteryVO } from '@/api/yian/asset/backend'
+import { getPersonnelPage, type PersonnelVO } from '@/api/yian/config/personnel'
 import {
   resolveAssetBatteryProfile,
   submitAssetBatteryInspection,
   type AssetInspectionAttachmentVO
 } from '@/api/yian/asset'
 import { useUserStoreWithOut } from '@/store/modules/user'
+import { buildPersonnelOptions } from '@/utils/yian/personnel'
 
 defineOptions({ name: 'AssetBatteryInspection' })
 
@@ -269,9 +283,13 @@ const userStore = useUserStoreWithOut()
 const loading = ref(false)
 const submitLoading = ref(false)
 const battery = ref<AssetBatteryVO | null>(null)
+const personnelOptions = ref<PersonnelVO[]>([])
 const profile = computed(() => resolveAssetBatteryProfile(battery.value))
 const inspectionFormRef = ref()
 const currentOperatorName = computed(() => userStore.getUser.nickname || '当前账号')
+const inspectorOptions = computed(() =>
+  buildPersonnelOptions(personnelOptions.value, battery.value?.workshopName || '', ['inspector'], ['ops_staff'])
+)
 
 const createInspectionForm = (): InspectionFormState => ({
   inspectedAt: dayjs().format('YYYY-MM-DD HH:mm'),
@@ -299,6 +317,19 @@ const resetInspectionForm = () => {
   inspectionForm.value = createInspectionForm()
 }
 
+const loadPersonnelOptions = async () => {
+  try {
+    const data = await getPersonnelPage({ pageNo: 1, pageSize: 200 })
+    personnelOptions.value = data.list || []
+  } catch {
+    personnelOptions.value = []
+  }
+}
+
+const syncDefaultInspector = () => {
+  inspectionForm.value.inspector = inspectorOptions.value[0]?.value || currentOperatorName.value
+}
+
 const checklistValidator =
   (field: keyof Pick<InspectionFormState, 'appearanceItems' | 'connectorItems' | 'powerItems' | 'lifeItems'>) =>
   (_rule: unknown, value: string[], callback: (error?: Error) => void) => {
@@ -317,7 +348,7 @@ const checklistValidator =
 
 const inspectionRules = reactive({
   inspectedAt: [{ required: true, message: '巡检时间不能为空', trigger: 'change' }],
-  inspector: [{ required: true, message: '巡检人不能为空', trigger: 'blur' }],
+  inspector: [{ required: true, message: '巡检人不能为空', trigger: 'change' }],
   source: [{ required: true, message: '巡检来源不能为空', trigger: 'change' }],
   conclusion: [{ required: true, message: '请选择巡检结论', trigger: 'change' }],
   summary: [{ required: true, message: '巡检摘要不能为空', trigger: 'blur' }],
@@ -333,7 +364,6 @@ const ensureCurrentOperator = async () => {
   if (!userStore.getIsSetUser) {
     await userStore.setUserInfoAction()
   }
-  inspectionForm.value.inspector = currentOperatorName.value
 }
 
 const getDetail = async () => {
@@ -345,9 +375,11 @@ const getDetail = async () => {
   loading.value = true
   try {
     await ensureCurrentOperator()
+    await loadPersonnelOptions()
     const list = await YianAssetApi.getBatteryList()
     battery.value = list.find((item) => String(item.id) === id) || null
     resetInspectionForm()
+    syncDefaultInspector()
   } finally {
     loading.value = false
   }
@@ -386,7 +418,9 @@ const handleSubmitInspection = async () => {
   if (!battery.value?.batteryCode) return
   submitLoading.value = true
   try {
-    inspectionForm.value.inspector = currentOperatorName.value
+    if (!inspectionForm.value.inspector) {
+      syncDefaultInspector()
+    }
     const attachments = [
       ...mapUploadFilesToAttachments(
         inspectionForm.value.imageFiles,

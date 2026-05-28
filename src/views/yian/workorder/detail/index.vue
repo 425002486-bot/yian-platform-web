@@ -279,10 +279,24 @@
                 <el-switch v-model="acceptForm.grounded" inline-prompt active-text="停飞" inactive-text="不停飞" />
               </el-form-item>
               <el-form-item label="机务负责人">
-                <el-input v-model="acceptForm.dispatcher" placeholder="填写机务负责人" />
+                <el-select v-model="acceptForm.dispatcher" filterable placeholder="选择机务负责人" class="!w-100%">
+                  <el-option
+                    v-for="item in dispatcherOptions"
+                    :key="`dispatcher-${item.userId}`"
+                    :label="item.label"
+                    :value="item.value"
+                  />
+                </el-select>
               </el-form-item>
               <el-form-item label="维修责任人">
-                <el-input v-model="acceptForm.assignee" placeholder="填写维修责任人" />
+                <el-select v-model="acceptForm.assignee" filterable placeholder="选择维修责任人" class="!w-100%">
+                  <el-option
+                    v-for="item in assigneeOptions"
+                    :key="`assignee-${item.userId}`"
+                    :label="item.label"
+                    :value="item.value"
+                  />
+                </el-select>
               </el-form-item>
               <el-form-item label="优先级">
                 <el-radio-group v-model="acceptForm.priority">
@@ -323,7 +337,14 @@
                 <el-button @click="applyDiagnosisAssistant">写入初诊助手建议</el-button>
               </div>
               <el-form-item label="初诊人">
-                <el-input v-model="diagnoseForm.engineer" disabled />
+                <el-select v-model="diagnoseForm.engineer" filterable placeholder="选择初诊人" class="!w-100%">
+                  <el-option
+                    v-for="item in engineerOptions"
+                    :key="`engineer-${item.userId}`"
+                    :label="item.label"
+                    :value="item.value"
+                  />
+                </el-select>
               </el-form-item>
               <el-form-item label="故障分类">
                 <el-input v-model="diagnoseForm.faultCategory" placeholder="如：飞控系统、动力系统" />
@@ -382,6 +403,16 @@
                   <el-button type="primary" plain @click="addPickItem">补充备件</el-button>
                 </el-space>
               </div>
+              <el-form-item label="领料人">
+                <el-select v-model="pickForm.picker" filterable placeholder="选择领料人" class="!w-100%">
+                  <el-option
+                    v-for="item in pickerOptions"
+                    :key="`picker-${item.userId}`"
+                    :label="item.label"
+                    :value="item.value"
+                  />
+                </el-select>
+              </el-form-item>
               <div v-if="pickForm.items.length" class="pick-items">
                 <div v-for="(item, index) in pickForm.items" :key="`pick-item-${index}`" class="pick-item-card">
                   <div class="pick-item-card__head">
@@ -455,7 +486,14 @@
 
             <el-form v-else-if="order.status === 'repairing'" :model="repairForm" label-width="110px">
               <el-form-item label="维修责任人">
-                <el-input v-model="repairForm.technician" disabled />
+                <el-select v-model="repairForm.technician" filterable placeholder="选择维修责任人" class="!w-100%">
+                  <el-option
+                    v-for="item in technicianOptions"
+                    :key="`technician-${item.userId}`"
+                    :label="item.label"
+                    :value="item.value"
+                  />
+                </el-select>
               </el-form-item>
               <el-form-item label="使用备件">
                 <el-input :model-value="usedPartsSummary" disabled />
@@ -489,7 +527,14 @@
                 </el-radio-group>
               </el-form-item>
               <el-form-item label="复检人">
-                <el-input v-model="inspectForm.inspector" disabled />
+                <el-select v-model="inspectForm.inspector" filterable placeholder="选择复检人" class="!w-100%">
+                  <el-option
+                    v-for="item in inspectorOptions"
+                    :key="`inspector-${item.userId}`"
+                    :label="item.label"
+                    :value="item.value"
+                  />
+                </el-select>
               </el-form-item>
               <el-form-item label="试飞记录">
                 <el-input
@@ -518,7 +563,14 @@
             <template v-else-if="order.status === 'releasing'">
               <el-form :model="releaseForm" label-width="110px" class="mt-16px">
                 <el-form-item label="审核人">
-                  <el-input v-model="releaseForm.reviewer" disabled />
+                  <el-select v-model="releaseForm.reviewer" filterable placeholder="选择放行审核人" class="!w-100%">
+                    <el-option
+                      v-for="item in reviewerOptions"
+                      :key="`reviewer-${item.userId}`"
+                      :label="item.label"
+                      :value="item.value"
+                    />
+                  </el-select>
                 </el-form-item>
                 <el-form-item label="放行结论">
                   <el-radio-group v-model="releaseForm.result">
@@ -595,6 +647,7 @@ import {
   getMaterialStockPage,
   type MaterialStockVO
 } from '@/api/yian/inventory'
+import { getPersonnelPage, type PersonnelVO } from '@/api/yian/config/personnel'
 import {
   RELEASE_META,
   YianWorkorderApi,
@@ -649,6 +702,14 @@ interface InventoryItemOption {
   specification?: string
 }
 
+interface PersonnelSelectOption {
+  label: string
+  value: string
+  userId: number
+  stationName: string
+  bizRole: string
+}
+
 type ActiveProcessingStage = Extract<
   WorkorderStage,
   'pending' | 'diagnosing' | 'picking' | 'repairing' | 'inspecting' | 'releasing'
@@ -662,6 +723,8 @@ const PROCESSING_STAGES: ActiveProcessingStage[] = [
   'inspecting',
   'releasing'
 ]
+
+const GLOBAL_PERSONNEL_STATION = '华东运营中心'
 
 const router = useRouter()
 const route = useRoute()
@@ -678,6 +741,8 @@ const inventoryReferenceLoading = ref(false)
 const inventoryReferenceRows = ref<MaterialStockVO[]>([])
 const itemOptions = ref<InventoryItemOption[]>([])
 const itemOptionsLoading = ref(false)
+const personnelLoading = ref(false)
+const personnelOptions = ref<PersonnelVO[]>([])
 
 const acceptForm = reactive({
   decision: 'accepted' as 'accepted' | 'return_for_info',
@@ -738,6 +803,61 @@ const imageUploadList = ref<UploadUserFile[]>([])
 const logUploadList = ref<UploadUserFile[]>([])
 const pendingImageAttachments = ref<WorkorderAttachmentItem[]>([])
 const pendingLogAttachments = ref<WorkorderAttachmentItem[]>([])
+
+const resolvePersonnelDisplayName = (person: PersonnelVO) =>
+  person.userName || person.jobTitle || person.bizRoleLabel || `用户#${person.userId}`
+
+const buildPersonnelOptions = (
+  primaryRoles: string[],
+  fallbackRoles: string[] = [],
+  options: { includeGlobal?: boolean } = {}
+): PersonnelSelectOption[] => {
+  const stationName = order.value?.siteName || ''
+  const result: PersonnelSelectOption[] = []
+  const seen = new Set<number>()
+  const append = (people: PersonnelVO[]) => {
+    people.forEach((person) => {
+      if (!person?.userId || seen.has(person.userId)) {
+        return
+      }
+      seen.add(person.userId)
+      result.push({
+        label: `${resolvePersonnelDisplayName(person)} / ${person.bizRoleLabel}`,
+        value: resolvePersonnelDisplayName(person),
+        userId: person.userId,
+        stationName: person.stationName,
+        bizRole: person.bizRole
+      })
+    })
+  }
+
+  const enabledPersonnel = personnelOptions.value.filter((item) => item.userStatus === 0)
+  const sameStationPersonnel = enabledPersonnel.filter((item) => item.stationName === stationName)
+  const globalPersonnel = enabledPersonnel.filter((item) => item.stationName === GLOBAL_PERSONNEL_STATION)
+  const otherPersonnel = enabledPersonnel.filter(
+    (item) => item.stationName !== stationName && item.stationName !== GLOBAL_PERSONNEL_STATION
+  )
+
+  primaryRoles.forEach((role) => append(sameStationPersonnel.filter((item) => item.bizRole === role)))
+  if (options.includeGlobal !== false) {
+    primaryRoles.forEach((role) => append(globalPersonnel.filter((item) => item.bizRole === role)))
+  }
+  fallbackRoles.forEach((role) => append(sameStationPersonnel.filter((item) => item.bizRole === role)))
+  if (options.includeGlobal !== false) {
+    fallbackRoles.forEach((role) => append(globalPersonnel.filter((item) => item.bizRole === role)))
+  }
+  primaryRoles.forEach((role) => append(otherPersonnel.filter((item) => item.bizRole === role)))
+  fallbackRoles.forEach((role) => append(otherPersonnel.filter((item) => item.bizRole === role)))
+  return result
+}
+
+const dispatcherOptions = computed(() => buildPersonnelOptions(['site_lead'], ['ops_staff']))
+const assigneeOptions = computed(() => buildPersonnelOptions(['ops_staff']))
+const engineerOptions = computed(() => buildPersonnelOptions(['ops_staff']))
+const pickerOptions = computed(() => buildPersonnelOptions(['parts_manager']))
+const technicianOptions = computed(() => buildPersonnelOptions(['ops_staff']))
+const inspectorOptions = computed(() => buildPersonnelOptions(['inspector']))
+const reviewerOptions = computed(() => buildPersonnelOptions(['release_approver']))
 
 const taskSceneText = computed(() => order.value?.taskScene || '待补录')
 const imageAttachments = computed(() => order.value?.imageAttachments || [])
@@ -1349,6 +1469,26 @@ const syncPickingInventoryToStock = async () => {
   await WmMiscIssueApi.finishMiscIssue(issueId)
 }
 
+const loadPersonnelOptions = async () => {
+  personnelLoading.value = true
+  try {
+    const data = await getPersonnelPage({ pageNo: 1, pageSize: 200 })
+    personnelOptions.value = data.list || []
+  } finally {
+    personnelLoading.value = false
+  }
+}
+
+const applyPersonnelDefaults = () => {
+  acceptForm.dispatcher = dispatcherOptions.value[0]?.value || currentOperatorName.value
+  acceptForm.assignee = assigneeOptions.value[0]?.value || currentOperatorName.value
+  diagnoseForm.engineer = acceptForm.assignee || currentOperatorName.value
+  pickForm.picker = pickerOptions.value[0]?.value || currentOperatorName.value
+  repairForm.technician = acceptForm.assignee || currentOperatorName.value
+  inspectForm.inspector = inspectorOptions.value[0]?.value || currentOperatorName.value
+  releaseForm.reviewer = reviewerOptions.value[0]?.value || currentOperatorName.value
+}
+
 const ensureCurrentOperator = async () => {
   if (!userStore.getIsSetUser) {
     await userStore.setUserInfoAction()
@@ -1358,14 +1498,14 @@ const ensureCurrentOperator = async () => {
 const resetStageForms = () => {
   acceptForm.decision = 'accepted'
   acceptForm.grounded = true
-  acceptForm.dispatcher = currentOperatorName.value
-  acceptForm.assignee = currentOperatorName.value
+  acceptForm.dispatcher = ''
+  acceptForm.assignee = ''
   acceptForm.priority = 'P2'
   acceptForm.deadline = order.value?.slaDeadline || ''
   acceptForm.deadlineReason = ''
   acceptForm.remark = ''
 
-  diagnoseForm.engineer = currentOperatorName.value
+  diagnoseForm.engineer = ''
   diagnoseForm.faultCategory = ''
   diagnoseForm.probableCause = ''
   diagnoseForm.riskLevel = order.value?.riskLevel === 'unrated' ? 'medium' : (order.value?.riskLevel || 'medium')
@@ -1374,27 +1514,28 @@ const resetStageForms = () => {
   diagnoseForm.suggestedPartsText = ''
   diagnoseForm.conclusion = ''
 
-  pickForm.picker = currentOperatorName.value
+  pickForm.picker = ''
   pickForm.warehouse = '华东备件库'
   pickForm.items = []
 
-  repairForm.technician = currentOperatorName.value
+  repairForm.technician = ''
   repairForm.solution = ''
   repairForm.result = ''
   repairForm.usedHours = 2
 
-  inspectForm.inspector = currentOperatorName.value
+  inspectForm.inspector = ''
   inspectForm.result = 'passed'
   inspectForm.flightRecord = ''
   inspectForm.conclusion = ''
   inspectForm.batteryCheck = true
   inspectForm.flightTest = true
 
-  releaseForm.reviewer = currentOperatorName.value
+  releaseForm.reviewer = ''
   releaseForm.result = 'approved'
   releaseForm.riskLevel = order.value?.riskLevel === 'unrated' ? 'medium' : (order.value?.riskLevel || 'medium')
   releaseForm.restrictions = ''
   releaseForm.conclusion = ''
+  applyPersonnelDefaults()
 }
 
 const syncFormsFromOrder = () => {
@@ -1421,6 +1562,8 @@ const syncFormsFromOrder = () => {
     diagnoseForm.needParts = diagnosis.needParts
     diagnoseForm.suggestedPartsText = diagnosis.suggestedParts.join('、')
     diagnoseForm.conclusion = diagnosis.conclusion
+  } else if (acceptForm.assignee) {
+    diagnoseForm.engineer = acceptForm.assignee
   }
 
   const picking = order.value.picking
@@ -1439,6 +1582,9 @@ const syncFormsFromOrder = () => {
   } else if (diagnoseForm.suggestedPartsText) {
     pickForm.items = normalizeSuggestedParts(diagnoseForm.suggestedPartsText)
   }
+  if (!pickForm.picker) {
+    pickForm.picker = pickerOptions.value[0]?.value || currentOperatorName.value
+  }
 
   const repair = order.value.repair
   if (repair) {
@@ -1446,6 +1592,8 @@ const syncFormsFromOrder = () => {
     repairForm.solution = repair.solution
     repairForm.result = repair.result
     repairForm.usedHours = repair.usedHours
+  } else if (acceptForm.assignee) {
+    repairForm.technician = acceptForm.assignee
   }
 
   const inspection = order.value.inspection
@@ -1459,7 +1607,7 @@ const syncFormsFromOrder = () => {
   }
 
   const release = order.value.release
-  releaseForm.reviewer = currentOperatorName.value
+  releaseForm.reviewer = release?.reviewer || reviewerOptions.value[0]?.value || currentOperatorName.value
   releaseForm.result = release?.result || 'approved'
   releaseForm.riskLevel = release?.riskLevel || (order.value.riskLevel === 'unrated' ? 'medium' : order.value.riskLevel)
   releaseForm.restrictions = release?.restrictions || ''
@@ -1469,6 +1617,9 @@ const syncFormsFromOrder = () => {
 const loadOrder = async () => {
   try {
     await ensureCurrentOperator()
+    if (!personnelOptions.value.length) {
+      await loadPersonnelOptions()
+    }
     order.value = YianWorkorderApi.getDetail(Number(route.params.id))
     resetStageForms()
     syncFormsFromOrder()
@@ -1814,6 +1965,16 @@ watch(
       return
     }
     await openRequestedProcessingDrawer()
+  }
+)
+
+watch(
+  () => acceptForm.assignee,
+  (value) => {
+    if (!order.value?.repair) {
+      diagnoseForm.engineer = value || currentOperatorName.value
+      repairForm.technician = value || currentOperatorName.value
+    }
   }
 )
 

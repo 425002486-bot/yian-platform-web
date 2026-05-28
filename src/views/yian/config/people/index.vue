@@ -3,12 +3,17 @@
     <el-form :inline="true" :model="queryParams" class="mb-16px" @submit.prevent="handleQuery">
       <el-form-item label="站点">
         <el-select v-model="queryParams.stationId" placeholder="全部站点" clearable class="!w-160px">
-          <el-option v-for="s in stationOptions" :key="s.id" :label="s.name" :value="s.id" />
+          <el-option v-for="item in stationOptions" :key="item.id" :label="item.name" :value="item.id" />
         </el-select>
       </el-form-item>
       <el-form-item label="角色">
-        <el-select v-model="queryParams.bizRole" placeholder="全部角色" clearable class="!w-140px">
-          <el-option v-for="r in bizRoleOptions" :key="r.code" :label="r.label" :value="r.code" />
+        <el-select v-model="queryParams.bizRole" placeholder="全部角色" clearable class="!w-160px">
+          <el-option
+            v-for="item in bizRoleOptions"
+            :key="item.code"
+            :label="item.label"
+            :value="item.code"
+          />
         </el-select>
       </el-form-item>
       <el-form-item>
@@ -22,13 +27,12 @@
     </div>
 
     <el-table v-loading="loading" :data="list" stripe>
-      <el-table-column label="姓名" prop="userName" width="100" />
-      <el-table-column label="岗位" prop="jobTitle" width="120" />
-      <el-table-column label="业务角色" prop="bizRoleLabel" width="120" />
-      <el-table-column label="所属站点" prop="stationName" width="140" />
-      <el-table-column label="可参与环节" prop="stages" min-width="200" />
-      <el-table-column label="手机" prop="mobile" width="130" />
-      <el-table-column label="状态" width="80">
+      <el-table-column label="姓名" prop="userName" width="120" />
+      <el-table-column label="岗位" prop="jobTitle" width="160" />
+      <el-table-column label="业务角色" prop="bizRoleLabel" width="140" />
+      <el-table-column label="所属站点" prop="stationName" width="180" />
+      <el-table-column label="手机" prop="mobile" width="140" />
+      <el-table-column label="状态" width="90">
         <template #default="{ row }">
           <el-tag :type="row.userStatus === 0 ? 'success' : 'info'" size="small">
             {{ row.userStatus === 0 ? '在职' : '停用' }}
@@ -55,7 +59,6 @@
       @current-change="getList"
     />
 
-    <!-- 新增/编辑弹窗 -->
     <el-dialog v-model="dialogVisible" :title="formType === 'create' ? '新增人员' : '编辑人员'" width="550px">
       <el-form ref="formRef" :model="formData" :rules="formRules" label-width="100px">
         <el-form-item label="系统用户" prop="userId">
@@ -66,24 +69,26 @@
             class="!w-100%"
             :disabled="formType === 'update'"
           >
-            <el-option v-for="u in userOptions" :key="u.id" :label="u.nickname" :value="u.id" />
+            <el-option v-for="item in userOptions" :key="item.id" :label="item.nickname" :value="item.id" />
           </el-select>
         </el-form-item>
         <el-form-item label="岗位名称" prop="jobTitle">
           <el-input v-model="formData.jobTitle" placeholder="如：维修工程师" />
         </el-form-item>
         <el-form-item label="业务角色" prop="bizRole">
-          <el-select v-model="formData.bizRole" placeholder="选择角色" class="!w-100%" @change="onRoleChange">
-            <el-option v-for="r in bizRoleOptions" :key="r.code" :label="r.label" :value="r.code" />
+          <el-select v-model="formData.bizRole" placeholder="选择角色" class="!w-100%">
+            <el-option
+              v-for="item in bizRoleOptions"
+              :key="item.code"
+              :label="item.label"
+              :value="item.code"
+            />
           </el-select>
         </el-form-item>
         <el-form-item label="所属站点" prop="stationId">
           <el-select v-model="formData.stationId" placeholder="选择站点" clearable class="!w-100%">
-            <el-option v-for="s in stationOptions" :key="s.id" :label="s.name" :value="s.id" />
+            <el-option v-for="item in stationOptions" :key="item.id" :label="item.name" :value="item.id" />
           </el-select>
-        </el-form-item>
-        <el-form-item label="可参与环节">
-          <el-input v-model="formData.stages" placeholder="如：受理、初诊、维修" />
         </el-form-item>
       </el-form>
       <template #footer>
@@ -97,7 +102,12 @@
 <script lang="ts" setup>
 import { ContentWrap } from '@/components/ContentWrap'
 import {
-  getPersonnelPage, getPersonnel, createPersonnel, updatePersonnel, deletePersonnel, getBizRoles,
+  createPersonnel,
+  deletePersonnel,
+  getBizRoles,
+  getPersonnel,
+  getPersonnelPage,
+  updatePersonnel,
   type PersonnelVO
 } from '@/api/yian/config/personnel'
 import { getStationPage } from '@/api/yian/config/station'
@@ -118,19 +128,9 @@ const queryParams = reactive({
   bizRole: undefined as string | undefined
 })
 
-// 下拉数据
 const stationOptions = ref<any[]>([])
 const bizRoleOptions = ref<any[]>([])
 const userOptions = ref<any[]>([])
-
-const ROLE_STAGES: Record<string, string> = {
-  site_lead: '全流程',
-  ops_staff: '受理、初诊、维修',
-  inspector: '复检',
-  release_approver: '放行',
-  parts_manager: '领料、退料、入库',
-  auditor: '审计日志查看'
-}
 
 const loadOptions = async () => {
   const [stationData, roles, users] = await Promise.all([
@@ -154,7 +154,11 @@ const getList = async () => {
   }
 }
 
-const handleQuery = () => { queryParams.pageNo = 1; getList() }
+const handleQuery = () => {
+  queryParams.pageNo = 1
+  getList()
+}
+
 const handleReset = () => {
   queryParams.stationId = undefined
   queryParams.bizRole = undefined
@@ -162,7 +166,6 @@ const handleReset = () => {
   getList()
 }
 
-// ====== 新增/编辑 ======
 const dialogVisible = ref(false)
 const formType = ref<'create' | 'update'>('create')
 const formRef = ref<FormInstance>()
@@ -173,8 +176,7 @@ const formData = reactive({
   userId: undefined as number | undefined,
   stationId: undefined as number | undefined,
   jobTitle: '',
-  bizRole: undefined as string | undefined,
-  stages: ''
+  bizRole: undefined as string | undefined
 })
 
 const formRules: FormRules = {
@@ -188,7 +190,6 @@ const resetForm = () => {
   formData.stationId = undefined
   formData.jobTitle = ''
   formData.bizRole = undefined
-  formData.stages = ''
 }
 
 const openForm = async (type: 'create' | 'update', id?: number) => {
@@ -196,14 +197,16 @@ const openForm = async (type: 'create' | 'update', id?: number) => {
   resetForm()
   if (type === 'update' && id) {
     const data = await getPersonnel(id)
-    Object.assign(formData, data)
+    Object.assign(formData, {
+      id: data.id,
+      userId: data.userId,
+      stationId: data.stationId,
+      jobTitle: data.jobTitle,
+      bizRole: data.bizRole
+    })
   }
   dialogVisible.value = true
   nextTick(() => formRef.value?.clearValidate())
-}
-
-const onRoleChange = (role: string) => {
-  formData.stages = ROLE_STAGES[role] || ''
 }
 
 const handleSubmit = async () => {
