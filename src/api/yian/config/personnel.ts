@@ -1,4 +1,6 @@
 import request from '@/config/axios'
+import { config } from '@/config/axios/config'
+import { getAccessToken, getTenantId, getVisitTenantId } from '@/utils/auth'
 
 export interface PersonnelVO {
   id: number
@@ -56,6 +58,34 @@ export const getRoleSummary = () => {
   return request.get({ url: '/mes/config/personnel/role-summary' })
 }
 
-export const getCurrentAccess = () => {
-  return request.get<YianCurrentAccessVO>({ url: '/mes/config/personnel/current-access' })
+export const getCurrentAccess = async (): Promise<YianCurrentAccessVO | null> => {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json'
+  }
+  const accessToken = getAccessToken()
+  const tenantId = getTenantId()
+  const visitTenantId = getVisitTenantId()
+  if (accessToken) {
+    headers.Authorization = `Bearer ${accessToken}`
+  }
+  if (tenantId !== undefined && tenantId !== null) {
+    headers['tenant-id'] = String(tenantId)
+  }
+  if (visitTenantId !== undefined && visitTenantId !== null) {
+    headers['visit-tenant-id'] = String(visitTenantId)
+  }
+
+  try {
+    const response = await fetch(`${config.base_url}/mes/config/personnel/current-access`, {
+      method: 'GET',
+      headers
+    })
+    if (!response.ok) {
+      return null
+    }
+    const payload = await response.json()
+    return (payload?.data ?? null) as YianCurrentAccessVO | null
+  } catch {
+    return null
+  }
 }

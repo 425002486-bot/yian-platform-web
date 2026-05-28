@@ -46,6 +46,9 @@ const DEFAULT_ACCESS: YianCurrentAccessVO = {
 
 let currentAccessPromise: Promise<YianCurrentAccessVO> | null = null
 
+const isEmptyPermissionMap = (permissions?: Record<string, YianPermissionLevel>) =>
+  !permissions || Object.values(permissions).every((level) => level === 'none')
+
 const normalizeAccess = (payload?: Partial<YianCurrentAccessVO> | null): YianCurrentAccessVO => ({
   ...DEFAULT_ACCESS,
   ...payload,
@@ -69,7 +72,10 @@ export const getCurrentYianAccess = async (force = false) => {
   if (!force) {
     const cached = wsCache.get(ACCESS_CACHE_KEY) as YianCurrentAccessVO | undefined
     if (cached) {
-      return normalizeAccess(cached)
+      const normalized = normalizeAccess(cached)
+      if (!isEmptyPermissionMap(normalized.permissions)) {
+        return normalized
+      }
     }
   }
 
