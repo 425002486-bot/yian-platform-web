@@ -127,13 +127,17 @@ const handleDetail = (id: number) => {
   push({ path: '/inventory/stock/detail', query: { id } })
 }
 
-onMounted(async () => {
+const refreshPage = async () => {
   const access = await getCurrentYianAccess()
   canManageParts.value = hasYianPermission(access, 'parts', 'exec')
   await getList()
+}
+
+onMounted(async () => {
+  await refreshPage()
 })
 
 onActivated(() => {
-  getList()
+  refreshPage()
 })
 </script>

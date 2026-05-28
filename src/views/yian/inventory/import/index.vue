@@ -8,13 +8,15 @@
         type="info"
         :closable="false"
         class="mb-16px"
-        description="支持导入备件主数据和期初库存。Excel 模板包含：料号、备件名称、规格型号、分类、供应商、当前库存、安全库存、计量单位。料号为必填项且不可重复。"
+        description="支持一次导入备件主数据和期初库存。模板字段包括：料号、备件名称、规格型号、分类、计量单位、供应商、当前库存、安全库存。其中料号、备件名称、分类、计量单位为必填；规格型号和供应商可不填；当前库存、安全库存按需填写。"
       />
 
       <el-form label-width="120px">
         <el-form-item label="更新已有数据">
           <el-switch v-model="updateSupport" />
-          <span class="ml-8px text-gray-400 text-sm">开启后，料号重复时将更新已有备件信息</span>
+          <span class="ml-8px text-gray-400 text-sm">
+            开启后，料号重复时会更新已有备件主数据和库存信息
+          </span>
         </el-form-item>
       </el-form>
 
@@ -43,7 +45,6 @@
       </div>
     </el-card>
 
-    <!-- 导入结果 -->
     <el-card v-if="importResult" class="mt-16px" header="导入结果">
       <el-descriptions :column="3" border>
         <el-descriptions-item label="新增成功">
@@ -91,7 +92,7 @@ const importResult = ref<{
 } | null>(null)
 
 const handleFileChange = (uploadFile: UploadFile) => {
-  selectedFile.value = uploadFile.raw!
+  selectedFile.value = uploadFile.raw || null
 }
 
 const handleFileRemove = () => {
@@ -111,12 +112,12 @@ const handleImport = async () => {
     const res = await importSparePartExcel(selectedFile.value, updateSupport.value)
     importResult.value = res
     if (res.failCount === 0) {
-      message.success(`导入成功！新增 ${res.createCount} 条，更新 ${res.updateCount} 条`)
+      message.success(`导入成功：新增 ${res.createCount} 条，更新 ${res.updateCount} 条`)
     } else {
-      message.warning(`导入完成，${res.failCount} 条失败，请查看详情`)
+      message.warning(`导入完成：${res.failCount} 条失败，请查看失败详情`)
     }
-  } catch (e: any) {
-    message.error('导入失败：' + (e.message || '未知错误'))
+  } catch (error: any) {
+    message.error(`导入失败：${error?.message || '未知错误'}`)
   } finally {
     importing.value = false
   }

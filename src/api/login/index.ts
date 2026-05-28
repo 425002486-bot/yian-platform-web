@@ -178,7 +178,7 @@ const buildMockMenus = () => [
         parentId: 4
       },
       {
-        name: '????',
+        name: '备件导入',
         path: 'import',
         component: 'yian/inventory/import/index',
         componentName: 'YianInventoryImport',
