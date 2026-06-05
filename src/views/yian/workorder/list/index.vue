@@ -131,6 +131,7 @@ import {
   type WorkorderListQuery,
   type WorkorderVO
 } from '@/api/yian/workorder'
+import { syncRuleRuntimeConfig } from '@/api/yian/config/rule'
 import { getCurrentYianAccess, hasYianPermission } from '@/utils/yian/access'
 
 defineOptions({ name: 'WorkorderList' })
@@ -250,6 +251,7 @@ watch(
 )
 
 onMounted(async () => {
+  await syncRuleRuntimeConfig()
   currentAccess.value = await getCurrentYianAccess()
   canCreateWorkorder.value = hasYianPermission(currentAccess.value, 'intake', 'exec')
   syncQueryFromRoute()
@@ -261,6 +263,7 @@ onActivated(() => {
   if (!hasMounted.value) {
     return
   }
+  syncRuleRuntimeConfig()
   syncQueryFromRoute()
   loadData()
 })

@@ -1,10 +1,12 @@
 import request from '@/config/axios'
 import { listAssetBattery } from '@/api/yian/asset'
 import { LocalDemoMesApi, isLocalMesDemoEnabled } from '@/api/mes/localDemo'
+import { evaluateBatteryRule, syncRuleRuntimeConfig } from '@/api/yian/config/rule'
 import { useCache } from '@/hooks/web/useCache'
 
 export interface AssetBatteryVO {
   id: number
+  createTime?: string
   batteryCode: string
   serialNumber: string
   model: string
@@ -57,6 +59,52 @@ const normalizeBatteryCode = (value?: string) => String(value || '').trim().toUp
 
 const cloneBatteryRecord = (item: AssetBatteryVO): AssetBatteryVO => ({ ...item })
 
+const resolveBatteryUpdateTime = (item?: Partial<AssetBatteryVO>) =>
+  new Date(item?.lastCheckAt || item?.lastCheckTime || item?.createTime || 0).getTime()
+
+const mergeBatteryRecordPreferRemote = (
+  remote: AssetBatteryVO,
+  local?: AssetBatteryVO
+): AssetBatteryVO => {
+  if (!local) {
+    return cloneBatteryRecord(remote)
+  }
+  const preferLocalHealth = resolveBatteryUpdateTime(local) > resolveBatteryUpdateTime(remote)
+  return {
+    ...local,
+    ...remote,
+    createTime: remote.createTime || local.createTime,
+    workshopName: remote.workshopName || local.workshopName,
+    linkedDeviceId: remote.linkedDeviceId ?? local.linkedDeviceId,
+    linkedDeviceCode: remote.linkedDeviceCode || local.linkedDeviceCode,
+    linkedDeviceName: remote.linkedDeviceName || local.linkedDeviceName,
+    soh: preferLocalHealth ? local.soh : remote.soh,
+    cycleCount: preferLocalHealth ? local.cycleCount : remote.cycleCount,
+    lastCheckTime: preferLocalHealth ? local.lastCheckTime || remote.lastCheckTime : remote.lastCheckTime,
+    lastCheckAt: preferLocalHealth ? local.lastCheckAt || remote.lastCheckAt : remote.lastCheckAt,
+    checkSource: preferLocalHealth ? local.checkSource || remote.checkSource : remote.checkSource,
+    healthStatus: preferLocalHealth ? local.healthStatus || remote.healthStatus : remote.healthStatus || local.healthStatus,
+    healthLabel: preferLocalHealth ? local.healthLabel || remote.healthLabel : remote.healthLabel || local.healthLabel,
+    sourceEvidence: preferLocalHealth
+      ? local.sourceEvidence || remote.sourceEvidence
+      : remote.sourceEvidence || local.sourceEvidence,
+    recommendation: preferLocalHealth
+      ? local.recommendation || remote.recommendation
+      : remote.recommendation || local.recommendation,
+    remark: remote.remark || local.remark
+  }
+}
+
+const projectBatteryRule = (
+  payload: Pick<AssetBatteryVO, 'soh' | 'lastCheckAt' | 'lastCheckTime' | 'checkSource' | 'recommendation'>
+) =>
+  evaluateBatteryRule({
+    soh: payload.soh,
+    lastCheckAt: payload.lastCheckAt || payload.lastCheckTime,
+    checkSource: payload.checkSource,
+    recommendation: payload.recommendation
+  })
+
 const buildHealthLabel = (healthStatus?: AssetBatteryVO['healthStatus']) => {
   if (healthStatus === 'danger') return '禁止放行'
   if (healthStatus === 'warning') return '寿命预警'
@@ -75,17 +123,20 @@ const setBatteryArchiveStore = (value: AssetBatteryVO[]) => {
   )
 }
 
-const mergeRemoteBatteryArchive = (list: AssetBatteryVO[]) => {
+const mergeRemoteBatteryArchive = (list: AssetBatteryVO[], retainArchiveOnly = false) => {
   const mergedMap = new Map<string, AssetBatteryVO>()
-  getBatteryArchiveStore().forEach((item) => {
-    mergedMap.set(normalizeBatteryCode(item.batteryCode), cloneBatteryRecord(item))
-  })
+  if (retainArchiveOnly) {
+    getBatteryArchiveStore().forEach((item) => {
+      mergedMap.set(normalizeBatteryCode(item.batteryCode), cloneBatteryRecord(item))
+    })
+  }
   list.forEach((item) => {
-    mergedMap.set(normalizeBatteryCode(item.batteryCode), cloneBatteryRecord(item))
+    const code = normalizeBatteryCode(item.batteryCode)
+    mergedMap.set(code, mergeBatteryRecordPreferRemote(item, mergedMap.get(code)))
   })
   const nextStore = Array.from(mergedMap.values()).sort((a, b) => {
-    const timeA = new Date(a.lastCheckAt || a.lastCheckTime || 0).getTime()
-    const timeB = new Date(b.lastCheckAt || b.lastCheckTime || 0).getTime()
+    const timeA = new Date(a.createTime || a.lastCheckAt || a.lastCheckTime || 0).getTime()
+    const timeB = new Date(b.createTime || b.lastCheckAt || b.lastCheckTime || 0).getTime()
     return timeB - timeA
   })
   setBatteryArchiveStore(nextStore)
@@ -97,6 +148,7 @@ const buildSeedBatteryList = (): AssetBatteryVO[] => {
     const matchedWorkshop = workshops.find((workshop) => workshop.name === item.siteName) || workshops[0]
     return {
       id: index + 1,
+      createTime: item.lastCheckAt,
       batteryCode: item.batteryCode,
       serialNumber: item.serialNumber,
       model: item.model,
@@ -119,18 +171,36 @@ const buildSeedBatteryList = (): AssetBatteryVO[] => {
   })
 }
 
-const mergeBatteryArchiveList = (baseList: AssetBatteryVO[]): AssetBatteryVO[] => {
+const mergeBatteryArchiveList = (baseList: AssetBatteryVO[], includeArchiveOnly = false): AssetBatteryVO[] => {
   const mergedMap = new Map<string, AssetBatteryVO>()
   baseList.forEach((item) => {
     mergedMap.set(normalizeBatteryCode(item.batteryCode), cloneBatteryRecord(item))
   })
   getBatteryArchiveStore().forEach((item) => {
-    mergedMap.set(normalizeBatteryCode(item.batteryCode), cloneBatteryRecord(item))
+    const code = normalizeBatteryCode(item.batteryCode)
+    const current = mergedMap.get(code)
+    if (!current) {
+      if (includeArchiveOnly) {
+        mergedMap.set(code, cloneBatteryRecord(item))
+      }
+      return
+    }
+    mergedMap.set(code, mergeBatteryRecordPreferRemote(current, item))
   })
   return Array.from(mergedMap.values())
 }
 
-const getMergedLocalBatteryList = () => mergeBatteryArchiveList(buildSeedBatteryList())
+const getMergedLocalBatteryList = () => mergeBatteryArchiveList(buildSeedBatteryList(), true)
+
+const applyBatteryRule = (item: AssetBatteryVO): AssetBatteryVO => {
+  const outcome = projectBatteryRule(item)
+  return {
+    ...item,
+    healthStatus: outcome.healthStatus,
+    healthLabel: outcome.healthLabel,
+    recommendation: outcome.recommendation
+  }
+}
 
 const buildLocalBatteryRecord = (
   payload: AssetBatterySaveReqVO,
@@ -142,11 +212,19 @@ const buildLocalBatteryRecord = (
   const linkedDevice = payload.linkedDeviceId
     ? LocalDemoMesApi.getMachinery(payload.linkedDeviceId)
     : null
-  const healthStatus = payload.healthStatus || current?.healthStatus || 'normal'
   const lastCheckValue = payload.lastCheckTime || current?.lastCheckAt || current?.lastCheckTime
+  const projectedRule = projectBatteryRule({
+    soh: payload.soh ?? current?.soh ?? 100,
+    lastCheckAt: lastCheckValue,
+    lastCheckTime: lastCheckValue,
+    checkSource: payload.checkSource || current?.checkSource || '',
+    recommendation: payload.recommendation || current?.recommendation || ''
+  })
+  const healthStatus = payload.healthStatus || projectedRule.healthStatus
 
   return {
     id,
+    createTime: current?.createTime || new Date().toISOString(),
     batteryCode: payload.batteryCode,
     serialNumber: payload.serialNumber,
     model: payload.model,
@@ -167,9 +245,9 @@ const buildLocalBatteryRecord = (
     lastCheckAt: lastCheckValue,
     checkSource: payload.checkSource || current?.checkSource || '',
     healthStatus,
-    healthLabel: buildHealthLabel(healthStatus),
+    healthLabel: projectedRule.healthLabel,
     sourceEvidence: payload.sourceEvidence || current?.sourceEvidence || '',
-    recommendation: payload.recommendation || current?.recommendation || '',
+    recommendation: projectedRule.recommendation,
     remark: payload.remark || current?.remark || ''
   }
 }
@@ -226,27 +304,29 @@ export const YianAssetApi = {
   },
 
   getBatteryList: async (params?: Record<string, unknown>) => {
+    await syncRuleRuntimeConfig()
     if (isLocalMesDemoEnabled()) {
-      return getMergedLocalBatteryList()
+      return getMergedLocalBatteryList().map(applyBatteryRule)
     }
     try {
       const response = (await request.get({ url: '/yian/asset/battery/list', params })) as AssetBatteryVO[]
-      const mergedList = mergeBatteryArchiveList(response || [])
-      mergeRemoteBatteryArchive(mergedList)
+      const mergedList = mergeBatteryArchiveList(response || [], false)
+      mergeRemoteBatteryArchive(mergedList, false)
       return mergedList
     } catch (error) {
       if (isLocalMesDemoEnabled()) {
-        return getMergedLocalBatteryList()
+        return getMergedLocalBatteryList().map(applyBatteryRule)
       }
       throw error
     }
   },
 
   getBattery: async (id: number) => {
+    await syncRuleRuntimeConfig()
     if (isLocalMesDemoEnabled()) {
       const matched = getMergedLocalBatteryList().find((item) => item.id === id)
       if (matched) {
-        return cloneBatteryRecord(matched)
+        return applyBatteryRule(cloneBatteryRecord(matched))
       }
       throw new Error('未找到对应电池档案')
     }
@@ -262,7 +342,7 @@ export const YianAssetApi = {
             item.id === response.id ||
             normalizeBatteryCode(item.batteryCode) === normalizeBatteryCode(response.batteryCode)
         )
-        const nextRecord = localOverride ? cloneBatteryRecord(localOverride) : response
+        const nextRecord = mergeBatteryRecordPreferRemote(response, localOverride)
         mergeRemoteBatteryArchive([nextRecord])
         return nextRecord
       }

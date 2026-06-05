@@ -101,6 +101,7 @@ import { listAssetBattery } from '@/api/yian/asset'
 import { resolveAssetDeviceMasterRecord } from '@/api/yian/asset/deviceMaster'
 import { getMaterialStockPage, type MaterialStockVO } from '@/api/yian/inventory'
 import { YianWorkorderApi } from '@/api/yian/workorder'
+import { syncRuleRuntimeConfig } from '@/api/yian/config/rule'
 
 defineOptions({ name: 'YianDashboard' })
 
@@ -231,7 +232,8 @@ const loadDashboard = async () => {
   }
 }
 
-onMounted(() => {
+onMounted(async () => {
+  await syncRuleRuntimeConfig()
   loadDashboard()
 })
 </script>

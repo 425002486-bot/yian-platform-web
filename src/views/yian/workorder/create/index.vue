@@ -135,6 +135,7 @@ import {
   type WorkorderAttachmentItem,
   type WorkorderSource
 } from '@/api/yian/workorder'
+import { syncRuleRuntimeConfig } from '@/api/yian/config/rule'
 import { buildPersonnelOptions } from '@/utils/yian/personnel'
 
 defineOptions({ name: 'WorkorderCreate' })
@@ -319,6 +320,7 @@ onMounted(async () => {
   if (!userStore.getIsSetUser) {
     await userStore.setUserInfoAction()
   }
+  await syncRuleRuntimeConfig()
   await Promise.all([loadDevices(), loadPersonnelOptions()])
   syncDefaultCreator()
   syncDefaultOwner()

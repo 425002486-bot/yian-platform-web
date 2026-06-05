@@ -2,6 +2,7 @@
 import type { DvMachineryVO } from '@/api/mes/dv/machinery'
 import type { AssetBatteryVO as BackendAssetBatteryVO } from '@/api/yian/asset/backend'
 import { useCache } from '@/hooks/web/useCache'
+import { evaluateBatteryRule, yianRuleRuntimeVersion } from '@/api/yian/config/rule'
 
 export type AssetRiskTone = 'success' | 'warning' | 'danger' | 'info'
 
@@ -37,6 +38,7 @@ export interface AssetHistoryEventVO {
 
 export interface AssetBatteryVO {
   id: string
+  createTime?: string
   batteryCode: string
   serialNumber: string
   model: string
@@ -512,6 +514,7 @@ export const resolveAssetDeviceProfile = (
 
 const toAssetBatteryVO = (battery: BackendAssetBatteryVO): AssetBatteryVO => ({
   id: String(battery.id || battery.batteryCode || ''),
+  createTime: battery.createTime,
   batteryCode: battery.batteryCode,
   serialNumber: battery.serialNumber,
   model: battery.model,
@@ -529,14 +532,30 @@ const toAssetBatteryVO = (battery: BackendAssetBatteryVO): AssetBatteryVO => ({
   recommendation: battery.recommendation
 })
 
+const applyBatteryRule = (battery: AssetBatteryVO): AssetBatteryVO => {
+  const outcome = evaluateBatteryRule({
+    soh: battery.soh,
+    lastCheckAt: battery.lastCheckAt,
+    checkSource: battery.checkSource,
+    recommendation: battery.recommendation
+  })
+  return {
+    ...battery,
+    healthStatus: outcome.healthStatus,
+    healthLabel: outcome.healthLabel,
+    recommendation: outcome.recommendation
+  }
+}
+
 export const listAssetBattery = (): AssetBatteryVO[] => {
+  void yianRuleRuntimeVersion.value
   const merged = new Map<string, AssetBatteryVO>()
   batteryAssets.forEach((item) => {
-    merged.set(item.batteryCode, { ...item })
+    merged.set(item.batteryCode, applyBatteryRule({ ...item }))
   })
   getBatteryArchiveStore().forEach((item) => {
     if (!item.batteryCode) return
-    merged.set(item.batteryCode, toAssetBatteryVO(item))
+    merged.set(item.batteryCode, applyBatteryRule(toAssetBatteryVO(item)))
   })
   return Array.from(merged.values())
 }
@@ -849,6 +868,48 @@ const getBatteryConclusionLabel = (conclusion: AssetBatteryInspectionPayload['co
   return '合格'
 }
 
+const buildInspectionDrivenBatteryOutcome = (
+  current: AssetBatteryLike | null | undefined,
+  payload: AssetBatteryInspectionPayload,
+  inspectedAt: string
+) => {
+  const soh = isNumber(payload.parsedMetrics?.soh)
+    ? clamp(payload.parsedMetrics!.soh, 0, 100)
+    : current?.soh || 100
+  const cycleCount = isNumber(payload.parsedMetrics?.cycleCount)
+    ? Math.max(0, payload.parsedMetrics!.cycleCount)
+    : current?.cycleCount || 0
+  const baseOutcome = evaluateBatteryRule({
+    soh,
+    cycleCount,
+    lastCheckAt: inspectedAt,
+    checkSource: payload.source,
+    recommendation: current?.recommendation
+  })
+
+  if (payload.conclusion === 'grounded' && baseOutcome.healthStatus !== 'danger') {
+    return {
+      healthStatus: 'danger' as const,
+      healthLabel: '禁止放行',
+      recommendation: '本次巡检判定异常，建议立即停用并安排复核、维修或更换。'
+    }
+  }
+
+  if (payload.conclusion === 'observe' && baseOutcome.healthStatus === 'normal') {
+    return {
+      healthStatus: 'warning' as const,
+      healthLabel: '限制放行',
+      recommendation: '本次巡检判定观察，建议限制放行并尽快安排复检。'
+    }
+  }
+
+  return {
+    healthStatus: baseOutcome.healthStatus,
+    healthLabel: baseOutcome.healthLabel,
+    recommendation: baseOutcome.recommendation
+  }
+}
+
 export const submitAssetBatteryInspection = (
   batteryCode: string,
   payload: AssetBatteryInspectionPayload
@@ -909,6 +970,23 @@ export const submitAssetBatteryInspection = (
   const archiveIndex = archiveStore.findIndex((item) => item.batteryCode === batteryCode)
   if (archiveIndex >= 0) {
     const target = { ...archiveStore[archiveIndex] }
+    const nextSoh = isNumber(payload.parsedMetrics?.soh)
+      ? clamp(payload.parsedMetrics!.soh, 0, 100)
+      : target.soh
+    const nextCycleCount = isNumber(payload.parsedMetrics?.cycleCount)
+      ? Math.max(0, payload.parsedMetrics!.cycleCount)
+      : target.cycleCount
+    const nextOutcome = buildInspectionDrivenBatteryOutcome(
+      {
+        ...target,
+        soh: nextSoh,
+        cycleCount: nextCycleCount,
+        lastCheckAt: inspectedAt,
+        checkSource: payload.source
+      },
+      payload,
+      inspectedAt
+    )
     if (isNumber(payload.parsedMetrics?.soh)) {
       target.soh = clamp(payload.parsedMetrics.soh, 0, 100)
     }
@@ -918,6 +996,10 @@ export const submitAssetBatteryInspection = (
     target.lastCheckAt = inspectedAt
     target.lastCheckTime = inspectedAt
     target.checkSource = payload.source
+    target.healthStatus = nextOutcome.healthStatus
+    target.healthLabel = nextOutcome.healthLabel
+    target.recommendation = nextOutcome.recommendation
+    target.sourceEvidence = `${payload.source} / ${conclusionLabel}`
     archiveStore[archiveIndex] = target
     setBatteryArchiveStore(archiveStore)
   }

@@ -101,6 +101,7 @@ import {
   YianWorkorderApi,
   type WorkorderBoardColumnVO
 } from '@/api/yian/workorder'
+import { syncRuleRuntimeConfig } from '@/api/yian/config/rule'
 
 defineOptions({ name: 'WorkorderBoard' })
 
@@ -148,7 +149,8 @@ watch(
   { deep: true }
 )
 
-onMounted(() => {
+onMounted(async () => {
+  await syncRuleRuntimeConfig()
   loadData()
   hasMounted.value = true
 })
@@ -157,6 +159,7 @@ onActivated(() => {
   if (!hasMounted.value) {
     return
   }
+  syncRuleRuntimeConfig()
   loadData()
 })
 </script>

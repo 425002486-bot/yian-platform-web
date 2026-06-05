@@ -720,6 +720,14 @@ import {
   getMaterialStockPage,
   type MaterialStockVO
 } from '@/api/yian/inventory'
+import { listLinkedBatteries, type AssetBatteryVO } from '@/api/yian/asset'
+import {
+  evaluateReleaseRule,
+  evaluateReleaseRuleRemote,
+  evaluateWorkorderStageRuleRemote,
+  syncRuleRuntimeConfig,
+  type ReleaseRuleOutcome
+} from '@/api/yian/config/rule'
 import { getPersonnelPage, type PersonnelVO } from '@/api/yian/config/personnel'
 import {
   RELEASE_META,
@@ -816,6 +824,12 @@ const PROCESSING_STAGES: ActiveProcessingStage[] = [
 ]
 
 const GLOBAL_PERSONNEL_STATION = '华东运营中心'
+const DEFAULT_RELEASE_RULE_DECISION: ReleaseRuleOutcome = {
+  summary: '当前尚未完成放行规则评估。',
+  recommendedResult: 'limited',
+  alerts: [],
+  blockingReasons: []
+}
 
 const router = useRouter()
 const route = useRoute()
@@ -1228,6 +1242,40 @@ const historyStageCards = computed<HistoryStageCard[]>(() => {
   return cards
 })
 
+const releaseRuleBatteries = computed<AssetBatteryVO[]>(() => {
+  if (!order.value) return []
+  return listLinkedBatteries(order.value.deviceCode, order.value.deviceId)
+})
+
+const releaseRuleDecision = ref<ReleaseRuleOutcome>({ ...DEFAULT_RELEASE_RULE_DECISION })
+
+const buildReleaseRuleInput = () => {
+  if (!order.value) {
+    return { batteries: [], riskLevel: 'medium' as const, inspectionPassed: false }
+  }
+  return {
+    riskLevel: order.value.riskLevel === 'unrated' ? 'medium' : order.value.riskLevel,
+    inspectionPassed: order.value.inspection?.result !== 'failed',
+    batteries: releaseRuleBatteries.value.map((item) => ({
+      batteryCode: item.batteryCode,
+      healthStatus: item.healthStatus,
+      soh: item.soh,
+      checkSource: item.checkSource,
+      lastCheckAt: item.lastCheckAt,
+      recommendation: item.recommendation
+    }))
+  }
+}
+
+const refreshReleaseRuleDecision = async () => {
+  const input = buildReleaseRuleInput()
+  try {
+    releaseRuleDecision.value = await evaluateReleaseRuleRemote(input)
+  } catch {
+    releaseRuleDecision.value = evaluateReleaseRule(input)
+  }
+}
+
 const currentAction = computed(() => {
   if (!order.value) {
     return { title: '-', description: '-', primaryText: '' }
@@ -1272,7 +1320,14 @@ const currentAction = computed(() => {
       description: '该工单已结束处理，可查看关闭原因和责任链记录。'
     }
   }
-  return actionMap[order.value.status]
+  const current = actionMap[order.value.status]
+  if (order.value.overdue && order.value.timeoutAction) {
+    return {
+      ...current,
+      description: `${current.description} 当前已超时，默认超时动作：${order.value.timeoutAction}`
+    }
+  }
+  return current
 })
 
 const normalizeSuggestedParts = (text: string): PickingDraftItem[] =>
@@ -2073,12 +2128,14 @@ const syncFormsFromOrder = () => {
 const loadOrder = async () => {
   try {
     await ensureCurrentOperator()
+    await syncRuleRuntimeConfig()
     if (!personnelOptions.value.length) {
       await loadPersonnelOptions()
     }
     order.value = YianWorkorderApi.getDetail(Number(route.params.id))
     resetStageForms()
     syncFormsFromOrder()
+    await refreshReleaseRuleDecision()
     expandedHistoryStages.value = historyStageCards.value.length
       ? [historyStageCards.value[historyStageCards.value.length - 1].key]
       : []
@@ -2086,6 +2143,7 @@ const loadOrder = async () => {
     order.value = undefined
     inventoryReferenceRows.value = []
     expandedHistoryStages.value = []
+    releaseRuleDecision.value = { ...DEFAULT_RELEASE_RULE_DECISION }
   }
 }
 
@@ -2229,6 +2287,19 @@ const writeDiagnosisAssistantToDiagnosis = async () => {
   diagnosisAssistantVisible.value = false
 }
 
+const validateWorkorderStageRule = async (payload: Parameters<typeof evaluateWorkorderStageRuleRemote>[0]) => {
+  try {
+    const outcome = await evaluateWorkorderStageRuleRemote(payload)
+    if (!outcome.allowed) {
+      message.warning(outcome.blockingReasons[0] || outcome.summary)
+      return false
+    }
+    return true
+  } catch {
+    return true
+  }
+}
+
 const submitAcceptance = async () => {
   if (!order.value || !acceptForm.dispatcher || !acceptForm.assignee || !acceptForm.deadline) {
     message.warning('请完整填写受理、分派和节点截止时间')
@@ -2236,6 +2307,13 @@ const submitAcceptance = async () => {
   }
   if (acceptForm.decision === 'return_for_info') {
     message.warning('当前 MVP 仅演示主链路流转，退回补充资料暂不在详情页内推进。')
+    return
+  }
+  const acceptanceAllowed = await validateWorkorderStageRule({
+    stage: 'pending',
+    grounded: acceptForm.grounded
+  })
+  if (!acceptanceAllowed) {
     return
   }
   YianWorkorderApi.submitAcceptance(order.value.id, {
@@ -2260,6 +2338,15 @@ const submitDiagnosis = async () => {
   }
   if (!diagnoseForm.conclusion) {
     message.warning('请填写处理建议')
+    return
+  }
+  const diagnosisAllowed = await validateWorkorderStageRule({
+    stage: 'diagnosing',
+    riskLevel: diagnoseForm.riskLevel,
+    groundedSuggestion: diagnoseForm.groundedSuggestion,
+    needParts: diagnoseForm.needParts
+  })
+  if (!diagnosisAllowed) {
     return
   }
   YianWorkorderApi.submitDiagnosis(order.value.id, {
@@ -2310,6 +2397,17 @@ const submitPicking = async () => {
     message.warning('当前库存分配不足，无法完成领料')
     return
   }
+  const pickingAllowed = await validateWorkorderStageRule({
+    stage: 'picking',
+    pickerProvided: Boolean(pickForm.picker.trim()),
+    itemCount: items.length,
+    inventorySufficient: !items.some(
+      (item) => item.currentInventory !== undefined && item.currentInventory < item.pickedQuantity!
+    ) && !allocations.some((item) => item.remaining > 0)
+  })
+  if (!pickingAllowed) {
+    return
+  }
   await syncPickingInventoryToStock()
   YianWorkorderApi.submitPicking(order.value.id, {
     picker: pickForm.picker,
@@ -2324,6 +2422,13 @@ const submitPicking = async () => {
 const submitRepair = async () => {
   if (!order.value || !repairForm.technician || !repairForm.solution || !repairForm.result) {
     message.warning('请完整填写维修动作和维修结论')
+    return
+  }
+  const repairAllowed = await validateWorkorderStageRule({
+    stage: 'repairing',
+    technicianProvided: Boolean(repairForm.technician)
+  })
+  if (!repairAllowed) {
     return
   }
   YianWorkorderApi.submitRepair(order.value.id, {
@@ -2343,6 +2448,15 @@ const submitInspection = async (forcedResult?: 'passed' | 'failed') => {
     return
   }
   const result = forcedResult || inspectForm.result
+  const inspectionAllowed = await validateWorkorderStageRule({
+    stage: 'inspecting',
+    inspectionPassed: result === 'passed',
+    batteryCheck: inspectForm.batteryCheck,
+    flightTest: inspectForm.flightTest
+  })
+  if (!inspectionAllowed) {
+    return
+  }
   YianWorkorderApi.submitInspection(order.value.id, {
     inspector: inspectForm.inspector,
     result,
@@ -2364,6 +2478,22 @@ const submitRelease = async (forcedResult?: WorkorderReleaseResult) => {
   const result = forcedResult || releaseForm.result
   if (result === 'limited' && !releaseForm.restrictions.trim()) {
     message.warning('限制放行时请填写限制条件')
+    return
+  }
+  const releaseStageAllowed = await validateWorkorderStageRule({
+    stage: 'releasing',
+    reviewResult: result,
+    restrictionsProvided: Boolean(releaseForm.restrictions.trim())
+  })
+  if (!releaseStageAllowed) {
+    return
+  }
+  if (result === 'approved' && releaseRuleDecision.value.recommendedResult !== 'approved') {
+    message.warning(releaseRuleDecision.value.blockingReasons[0] || releaseRuleDecision.value.summary)
+    return
+  }
+  if (result === 'limited' && releaseRuleDecision.value.recommendedResult === 'rejected') {
+    message.warning(releaseRuleDecision.value.blockingReasons[0] || releaseRuleDecision.value.summary)
     return
   }
   YianWorkorderApi.submitRelease(order.value.id, {

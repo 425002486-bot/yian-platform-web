@@ -113,6 +113,7 @@ import { ContentWrap } from '@/components/ContentWrap'
 import { DvMachineryApi, type DvMachineryVO } from '@/api/mes/dv/machinery'
 import {
   reparseAssetDeviceDocuments,
+  refreshAssetDeviceRuleRecord,
   resolveAssetDeviceMasterRecord,
   uploadAssetDeviceDocument,
   type AssetDeviceMasterRecordVO
@@ -146,6 +147,7 @@ const getDetail = async () => {
     const machinery = await DvMachineryApi.getMachinery(id)
     device.value = machinery
     record.value = resolveAssetDeviceMasterRecord(machinery)
+    record.value = await refreshAssetDeviceRuleRecord(machinery)
   } finally {
     loading.value = false
   }

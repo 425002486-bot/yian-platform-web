@@ -1,4 +1,9 @@
-import dayjs from 'dayjs'
+﻿import dayjs from 'dayjs'
+import {
+  buildSlaDeadline,
+  getSlaRuleForStage,
+  type RuleRuntimeStage
+} from '@/api/yian/config/rule'
 import { useCache } from '@/hooks/web/useCache'
 
 export type WorkorderStage =
@@ -142,6 +147,7 @@ export interface WorkorderVO extends WorkorderEntity {
   tagType: 'danger' | 'warning' | 'primary' | 'success' | 'info'
   currentStep: number
   overdue: boolean
+  timeoutAction: string
   riskLevel: WorkorderRiskLevel | 'unrated'
   riskLevelLabel: string
   releaseStatus: WorkorderReleaseResult
@@ -305,7 +311,7 @@ const seedOrders = (): WorkorderEntity[] => [
     faultTime: '2026-05-13 10:10',
     taskScene: '站点巡检作业阶段',
     symptom: '云台抖动异常，热成像画面存在跳帧',
-    description: '巡检时发现云台稳定性下降，需确认减震结构与相机模组状态。',
+    description: '巡检时发现云台稳定性下降，需要确认减震结构与相机模组状态。',
     reporterPhone: '0512-8888 2033',
     owner: '王工',
     creator: '华东运维中心',
@@ -319,7 +325,7 @@ const seedOrders = (): WorkorderEntity[] => [
       assignee: '王工',
       priority: 'P2',
       deadline: '2026-05-14 10:25',
-      remark: '先排查云台减震球与相机排线',
+      remark: '先排查云台减震球与相机排线。',
       acceptedAt: '2026-05-13 10:40'
     },
     timeline: [
@@ -338,7 +344,7 @@ const seedOrders = (): WorkorderEntity[] => [
     faultTime: '2026-05-12 16:20',
     taskScene: '返场温升复核',
     symptom: '动力系统高温告警，返场后电机温升持续偏高',
-    description: '系统告警触发后停飞，初诊判断需更换动力相关部件。',
+    description: '系统告警触发后停飞，初诊判断需要更换动力相关部件。',
     owner: '李工',
     creator: '系统告警',
     createTime: '2026-05-12 16:28',
@@ -361,7 +367,7 @@ const seedOrders = (): WorkorderEntity[] => [
       riskLevel: 'high',
       groundedSuggestion: true,
       needParts: true,
-      conclusion: '3 号电机温升异常，建议更换电机与连接线并复位飞控。',
+      conclusion: '3 号电机温升异常，建议更换电机与连接线后再复位飞控。',
       suggestedParts: ['3 号电机总成', '电调连接线'],
       diagnosedAt: '2026-05-12 17:10'
     },
@@ -405,7 +411,7 @@ const seedOrders = (): WorkorderEntity[] => [
       assignee: '张工',
       priority: 'P2',
       deadline: '2026-05-14 18:00',
-      remark: '复位飞控并执行全套地面检查',
+      remark: '复位飞控并执行全套地面检查。',
       acceptedAt: '2026-05-10 09:45'
     },
     diagnosis: {
@@ -415,7 +421,7 @@ const seedOrders = (): WorkorderEntity[] => [
       riskLevel: 'medium',
       groundedSuggestion: true,
       needParts: true,
-      conclusion: '飞控参数漂移，需复位并更换受损桨叶。',
+      conclusion: '飞控参数漂移，需要复位并更换受损桨叶。',
       suggestedParts: ['桨叶套装'],
       diagnosedAt: '2026-05-10 10:20'
     },
@@ -465,6 +471,8 @@ const saveOrders = (orders: WorkorderEntity[]) => {
   wsCache.set(STORAGE_KEY, orders)
 }
 
+const resolveStageSlaDeadline = (stage: RuleRuntimeStage, from?: string) => buildSlaDeadline(stage, from)
+
 const isOverdue = (order: WorkorderEntity) =>
   !['completed', 'closed'].includes(order.status) && dayjs(order.slaDeadline).isBefore(dayjs())
 
@@ -472,6 +480,11 @@ const toVO = (order: WorkorderEntity): WorkorderVO => {
   const stageMeta = STAGE_META[order.status]
   const releaseStatus = order.status === 'releasing' ? 'pending' : order.release?.result || 'pending'
   const riskLevel = order.diagnosis?.riskLevel || 'unrated'
+  const timeoutAction = ['pending', 'diagnosing', 'picking', 'repairing', 'inspecting', 'releasing'].includes(
+    order.status
+  )
+    ? getSlaRuleForStage(order.status as RuleRuntimeStage).timeoutAction
+    : ''
   return {
     ...clone(order),
     sourceLabel: SOURCE_LABEL_MAP[order.source],
@@ -479,6 +492,7 @@ const toVO = (order: WorkorderEntity): WorkorderVO => {
     tagType: stageMeta.tagType,
     currentStep: stageMeta.step,
     overdue: isOverdue(order),
+    timeoutAction,
     riskLevel,
     riskLevelLabel: RISK_LEVEL_LABEL_MAP[riskLevel],
     releaseStatus,
@@ -640,7 +654,7 @@ export const YianWorkorderApi = {
       deviceId: data.deviceId,
       deviceCode: data.deviceCode,
       deviceName: data.deviceName,
-      siteName: data.siteName || '待补录',
+      siteName: data.siteName || '待补全',
       source: data.source,
       faultTime: data.faultTime,
       taskScene: data.taskScene,
@@ -652,10 +666,10 @@ export const YianWorkorderApi = {
       owner: data.owner || '待分派',
       creator: data.creator,
       createTime: now(),
-      slaDeadline: dayjs().add(1, 'day').format('YYYY-MM-DD HH:mm'),
+      slaDeadline: resolveStageSlaDeadline('pending'),
       status: 'pending',
       timeline: [
-        createTimeline('pending', '工单创建', `${SOURCE_LABEL_MAP[data.source]}提交异常工单`, data.creator)
+        createTimeline('pending', '宸ュ崟鍒涘缓', `${SOURCE_LABEL_MAP[data.source]}鎻愪氦寮傚父宸ュ崟`, data.creator)
       ]
     }
     orders.unshift(order)
@@ -675,7 +689,7 @@ export const YianWorkorderApi = {
       draft.timeline.push(
         createTimeline(
           draft.status,
-          `补充${label}`,
+          `琛ュ厖${label}`,
           `${payload.operator} 新增 ${payload.files.length} 份${label}`,
           payload.operator,
           uploadedAt
@@ -724,6 +738,7 @@ export const YianWorkorderApi = {
     return mutateOrder(id, (draft) => {
       draft.owner = payload.engineer
       draft.status = payload.needParts ? 'picking' : 'repairing'
+      draft.slaDeadline = resolveStageSlaDeadline(draft.status)
       draft.diagnosis = { ...payload, diagnosedAt: now() }
       draft.timeline.push(
         createTimeline(
@@ -742,6 +757,7 @@ export const YianWorkorderApi = {
   ) {
     return mutateOrder(id, (draft) => {
       draft.status = 'repairing'
+      draft.slaDeadline = resolveStageSlaDeadline('repairing')
       draft.picking = { ...payload, pickedAt: now() }
       draft.timeline.push(
         createTimeline(
@@ -761,9 +777,10 @@ export const YianWorkorderApi = {
     return mutateOrder(id, (draft) => {
       draft.owner = payload.technician
       draft.status = 'inspecting'
+      draft.slaDeadline = resolveStageSlaDeadline('inspecting')
       draft.repair = { ...payload, repairedAt: now() }
       draft.timeline.push(
-        createTimeline('inspecting', '提交维修结果', payload.result, payload.technician)
+        createTimeline('inspecting', '鎻愪氦缁翠慨缁撴灉', payload.result, payload.technician)
       )
     })
   },
@@ -780,13 +797,15 @@ export const YianWorkorderApi = {
       draft.inspection = { ...payload, inspectedAt: now() }
       if (payload.result === 'passed') {
         draft.status = 'releasing'
+        draft.slaDeadline = resolveStageSlaDeadline('releasing')
         draft.timeline.push(
-          createTimeline('releasing', '复检通过', payload.conclusion, payload.inspector)
+          createTimeline('releasing', '澶嶆閫氳繃', payload.conclusion, payload.inspector)
         )
       } else {
         draft.status = 'repairing'
+        draft.slaDeadline = resolveStageSlaDeadline('repairing')
         draft.timeline.push(
-          createTimeline('repairing', '复检未通过', payload.conclusion, payload.inspector)
+          createTimeline('repairing', '澶嶆鏈€氳繃', payload.conclusion, payload.inspector)
         )
       }
     })
@@ -805,13 +824,14 @@ export const YianWorkorderApi = {
       draft.release = { ...payload, reviewedAt: now() }
       if (payload.result === 'rejected') {
         draft.status = 'repairing'
+        draft.slaDeadline = resolveStageSlaDeadline('repairing')
         draft.timeline.push(
-          createTimeline('repairing', '放行驳回', payload.conclusion, payload.reviewer)
+          createTimeline('repairing', '鏀捐椹冲洖', payload.conclusion, payload.reviewer)
         )
       } else {
         draft.status = 'completed'
         draft.timeline.push(
-          createTimeline('completed', '完成放行', payload.conclusion, payload.reviewer)
+          createTimeline('completed', '瀹屾垚鏀捐', payload.conclusion, payload.reviewer)
         )
       }
     })
@@ -823,3 +843,4 @@ export const YianWorkorderApi = {
     return orders.map(toVO)
   }
 }
+

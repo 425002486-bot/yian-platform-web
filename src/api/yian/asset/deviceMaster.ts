@@ -5,6 +5,7 @@ import type {
   AssetHistoryEventVO,
   AssetInspectionAttachmentVO
 } from '@/api/yian/asset'
+import { evaluateDeviceAdmissionRuleRemote } from '@/api/yian/config/rule'
 import {
   listAssetBattery,
   listLinkedBatteries,
@@ -248,6 +249,24 @@ const setStore = (value: Record<string, Partial<AssetDeviceMasterRecordVO>>) => 
   wsCache.set(STORAGE_KEY, value)
 }
 
+const syncRemoteRuleResultToStore = (
+  code: string,
+  payload: Partial<AssetDeviceMasterRecordVO>
+) => {
+  if (!code) return
+  const store = getStore()
+  const current = store[code] || {}
+  store[code] = {
+    ...current,
+    ...payload,
+    linkedBatteries: payload.linkedBatteries || current.linkedBatteries,
+    standardBatteryCodes: payload.standardBatteryCodes || current.standardBatteryCodes,
+    warnings: payload.warnings || current.warnings,
+    missingItems: payload.missingItems || current.missingItems
+  }
+  setStore(store)
+}
+
 const normalizeIdentityValue = (value?: string) => String(value || '').trim().toUpperCase()
 
 const isAircraftMachineryType = (value?: string) => value === AIRCRAFT_MACHINERY_TYPE_NAME
@@ -408,6 +427,14 @@ const deriveRecordState = (
     currentStatus = 'pending_check'
     statusReason = record.warnings[0] || record.missingItems[0] || '已命中待检条件'
     statusSource = record.warnings.length ? '来源：主档解析' : '来源：设备巡检记录'
+  } else if (latestInspection?.conclusion === 'grounded') {
+    currentStatus = 'grounded'
+    statusReason = '鏈€杩戜竴娆¤澶囧贰妫€缁撹涓哄紓甯革紝璁惧搴旀殏鍋滀娇鐢ㄥ苟浼樺厛鏁存敼'
+    statusSource = '鏉ユ簮锛氳澶囧贰妫€璁板綍'
+  } else if (latestInspection?.conclusion === 'observe') {
+    currentStatus = 'pending_check'
+    statusReason = '鏈€杩戜竴娆¤澶囧贰妫€缁撹涓鸿瀵燂紝寤鸿浼樺厛瀹屾垚澶嶆鍚庡啀缁х画浣跨敤'
+    statusSource = '鏉ユ簮锛氳澶囧贰妫€璁板綍'
   }
 
   if (batteryAlert.level === 'danger') {
@@ -657,6 +684,38 @@ export const resolveAssetDeviceMasterRecord = (
     history: clone(cached.history || base.history),
     inspections: clone(cached.inspections || base.inspections)
   })
+}
+
+export const refreshAssetDeviceRuleRecord = async (device?: Partial<DvMachineryVO> | null) => {
+  if (!device?.id || !device.code) return resolveAssetDeviceMasterRecord(device)
+  try {
+    const remote = await evaluateDeviceAdmissionRuleRemote(device.id)
+    syncRemoteRuleResultToStore(device.code, {
+      enableStatus: remote.enableStatus,
+      enableStatusLabel: remote.enableStatusLabel,
+      currentStatus: remote.currentStatus,
+      currentStatusLabel: remote.currentStatusLabel,
+      currentStatusTagType: remote.currentStatusTagType,
+      statusReason: remote.statusReason,
+      statusSource: remote.statusSource,
+      warningLevel: remote.warningLevel,
+      warningLevelLabel: remote.warningLevelLabel,
+      warningSummary: remote.warningSummary,
+      recommendedAction: remote.recommendedAction,
+      linkedBatteries: [...(remote.linkedBatteryCodes || [])],
+      standardBatteryCodes: [...(remote.linkedBatteryCodes || [])],
+      workorderSummary: remote.workorderSummary,
+      warnings: [...(remote.warnings || [])],
+      missingItems: [...(remote.missingItems || [])]
+    })
+  } catch {
+    // Keep local derived record as fallback when backend rule service is not yet deployed.
+  }
+  return resolveAssetDeviceMasterRecord(device)
+}
+
+export const refreshAssetDeviceRuleRecords = async (devices: Array<Partial<DvMachineryVO> | null | undefined>) => {
+  await Promise.allSettled(devices.map((item) => refreshAssetDeviceRuleRecord(item)))
 }
 
 export const saveAssetDeviceMasterRecord = (

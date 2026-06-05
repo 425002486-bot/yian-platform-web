@@ -168,11 +168,13 @@
 </template>
 
 <script lang="ts" setup>
+import { onActivated, onMounted } from 'vue'
 import { ContentWrap } from '@/components/ContentWrap'
 import { DvMachineryApi, type DvMachineryVO } from '@/api/mes/dv/machinery'
 import {
   ASSET_DEVICE_ENABLE_STATUS_OPTIONS,
   ASSET_DEVICE_STATUS_OPTIONS,
+  refreshAssetDeviceRuleRecords,
   resolveAssetDeviceMasterRecord,
   type AssetDeviceEnableStatus,
   type AssetDeviceCurrentStatus,
@@ -199,6 +201,7 @@ const exportLoading = ref(false)
 const canManageAsset = ref(false)
 const canInspectAsset = ref(false)
 const deviceList = ref<DvMachineryVO[]>([])
+const hasMounted = ref(false)
 const queryFormRef = ref()
 const formRef = ref()
 const queryParams = reactive({
@@ -244,6 +247,7 @@ const getList = async () => {
       name: queryParams.name || undefined
     })
     deviceList.value = data.list
+    await refreshAssetDeviceRuleRecords(deviceList.value)
   } finally {
     loading.value = false
   }
@@ -373,6 +377,14 @@ onMounted(async () => {
   const access = await getCurrentYianAccess()
   canManageAsset.value = hasYianPermission(access, 'asset', 'exec')
   canInspectAsset.value = hasYianPermission(access, 'inspect', 'exec')
+  await getList()
+  hasMounted.value = true
+})
+
+onActivated(() => {
+  if (!hasMounted.value) {
+    return
+  }
   getList()
 })
 </script>

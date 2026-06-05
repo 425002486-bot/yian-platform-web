@@ -53,7 +53,7 @@
 
 <script lang="ts" setup>
 import { ContentWrap } from '@/components/ContentWrap'
-import { getSlaRuleList, updateSlaRule, type SlaRuleVO } from '@/api/yian/config/rule'
+import { getSlaRuleList, syncRuleRuntimeConfig, updateSlaRule, type SlaRuleVO } from '@/api/yian/config/rule'
 
 defineOptions({ name: 'ConfigSla' })
 
@@ -81,6 +81,7 @@ const startEdit = (row: SlaRuleVO) => {
 
 const handleSave = async () => {
   await updateSlaRule(editForm)
+  await syncRuleRuntimeConfig(true)
   message.success('保存成功')
   editingId.value = null
   loadData()

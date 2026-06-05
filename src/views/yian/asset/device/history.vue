@@ -64,7 +64,11 @@
 <script lang="ts" setup>
 import { ContentWrap } from '@/components/ContentWrap'
 import { DvMachineryApi, DvMachineryVO } from '@/api/mes/dv/machinery'
-import { resolveAssetDeviceMasterRecord, type AssetDeviceMasterRecordVO } from '@/api/yian/asset/deviceMaster'
+import {
+  refreshAssetDeviceRuleRecord,
+  resolveAssetDeviceMasterRecord,
+  type AssetDeviceMasterRecordVO
+} from '@/api/yian/asset/deviceMaster'
 
 defineOptions({ name: 'AssetDeviceHistory' })
 
@@ -95,6 +99,7 @@ const getDetail = async () => {
     const machinery = await DvMachineryApi.getMachinery(id)
     device.value = machinery
     record.value = resolveAssetDeviceMasterRecord(machinery)
+    record.value = await refreshAssetDeviceRuleRecord(machinery)
   } finally {
     loading.value = false
   }

@@ -161,7 +161,14 @@ const filteredBatteryList = computed(() => {
       const matchesWorkshop = !query.workshopId || item.workshopId === query.workshopId
       return matchesKeyword && matchesHealth && matchesWorkshop
     })
-    .sort((left, right) => Number(right.id || 0) - Number(left.id || 0))
+    .sort((left, right) => {
+      const leftTime = new Date(left.createTime || '').getTime()
+      const rightTime = new Date(right.createTime || '').getTime()
+      if (leftTime || rightTime) {
+        return rightTime - leftTime
+      }
+      return Number(right.id || 0) - Number(left.id || 0)
+    })
 })
 
 const batteryProfiles = computed(() =>
