@@ -249,6 +249,74 @@
         </template>
       </el-dialog>
 
+      <el-dialog v-model="diagnosisAssistantVisible" title="初诊助手" width="920px" top="8vh">
+        <div v-if="order" class="diagnosis-assistant">
+          <div class="diagnosis-assistant__toolbar">
+            <div class="diagnosis-assistant__chips">
+              <el-tag effect="plain" :type="logAttachments.length ? 'success' : 'info'">
+                {{ logAttachments.length ? `已关联飞行日志 ${logAttachments.length} 份` : '暂未关联飞行日志' }}
+              </el-tag>
+              <el-tag effect="plain" :type="imageAttachments.length ? 'success' : 'info'">
+                {{ imageAttachments.length ? `已读取现场附件 ${imageAttachments.length} 份` : '暂未读取现场附件' }}
+              </el-tag>
+              <el-tag effect="plain">当前工单：{{ order.orderNo }}</el-tag>
+            </div>
+            <el-button @click="handleDiagnosisAssistantReimportLog">重新导入日志</el-button>
+          </div>
+
+          <div class="diagnosis-assistant__messages">
+            <div
+              v-for="(item, index) in diagnosisAssistantMessages"
+              :key="`diagnosis-assistant-${index}`"
+              class="diagnosis-assistant__message"
+              :class="`diagnosis-assistant__message--${item.role}`"
+            >
+              <strong>{{ item.title }}</strong>
+              <p>{{ item.content }}</p>
+            </div>
+          </div>
+
+          <div v-if="diagnosisAssistantDraftResult" class="diagnosis-assistant__draft">
+            <div class="diagnosis-assistant__draft-title">当前初诊草案</div>
+            <div class="diagnosis-assistant__draft-grid">
+              <div><strong>故障分类</strong><span>{{ diagnosisAssistantDraftResult.faultCategory }}</span></div>
+              <div><strong>风险等级</strong><span>{{ riskLevelLabel(diagnosisAssistantDraftResult.riskLevel) }}</span></div>
+              <div><strong>停飞建议</strong><span>{{ diagnosisAssistantDraftResult.groundedSuggestion ? '建议停飞' : '可继续观察' }}</span></div>
+              <div><strong>是否需要备件</strong><span>{{ diagnosisAssistantDraftResult.needParts ? '是' : '否' }}</span></div>
+              <div class="full"><strong>疑似原因</strong><span>{{ diagnosisAssistantDraftResult.probableCause }}</span></div>
+              <div class="full"><strong>建议领料清单</strong><span>{{ diagnosisAssistantDraftResult.suggestedPartsText || '无' }}</span></div>
+              <div class="full"><strong>处理建议</strong><span>{{ diagnosisAssistantDraftResult.conclusion }}</span></div>
+            </div>
+          </div>
+
+          <div class="diagnosis-assistant__composer">
+            <el-input
+              v-model="diagnosisAssistantDraft"
+              type="textarea"
+              :rows="4"
+              resize="none"
+              placeholder="请输入补充信息，例如：是否立即停飞、是否已复现故障、现场是否更换过备件。"
+            />
+            <div class="drawer-footer">
+              <el-button
+                :loading="diagnosisAssistantStreaming || diagnosisAssistantBootstrapping"
+                @click="sendDiagnosisAssistantPrompt"
+              >
+                发送问题
+              </el-button>
+              <el-button
+                type="primary"
+                :disabled="!diagnosisAssistantDraftResult || diagnosisAssistantBootstrapping"
+                :loading="diagnosisAssistantStreaming || diagnosisAssistantBootstrapping"
+                @click="writeDiagnosisAssistantToDiagnosis"
+              >
+                写入初诊
+              </el-button>
+            </div>
+          </div>
+        </div>
+      </el-dialog>
+
       <el-drawer
         v-model="processingDrawerVisible"
         :title="processingDrawerMeta.title"
@@ -331,10 +399,13 @@
             <el-form v-else-if="order.status === 'diagnosing'" :model="diagnoseForm" label-width="110px">
               <div class="drawer-inline-head">
                 <div>
-                  <div class="drawer-inline-head__title">初诊助手建议</div>
-                  <p>先生成默认建议，再由人工确认故障分类、风险等级、是否需要备件和处理建议。</p>
+                  <div class="drawer-inline-head__title">初诊助手</div>
+                  <p>先结合飞行日志、现场附件和机务补充信息形成初诊建议，再由人工确认初诊结果。</p>
                 </div>
-                <el-button @click="applyDiagnosisAssistant">写入初诊助手建议</el-button>
+                <el-space wrap>
+                  <el-button type="primary" plain @click="openDiagnosisAssistant">初诊助手</el-button>
+                  <el-button :disabled="!diagnosisAssistantDraftResult" @click="applyDiagnosisAssistant">写入当前草案</el-button>
+                </el-space>
               </div>
               <el-form-item label="初诊人">
                 <el-select v-model="diagnoseForm.engineer" filterable placeholder="选择初诊人" class="!w-100%">
@@ -638,6 +709,8 @@
 
 <script lang="ts" setup>
 import type { UploadFile, UploadFiles, UploadUserFile } from 'element-plus'
+import { ChatConversationApi } from '@/api/ai/chat/conversation'
+import { ChatMessageApi } from '@/api/ai/chat/message'
 import { ContentWrap } from '@/components/ContentWrap'
 import { useUserStoreWithOut } from '@/store/modules/user'
 import { WmMiscIssueApi } from '@/api/mes/wm/miscissue'
@@ -700,6 +773,24 @@ interface InventoryItemOption {
   code?: string
   name: string
   specification?: string
+}
+
+interface DiagnosisAssistantMessage {
+  role: 'assistant' | 'user'
+  title: string
+  content: string
+  rawContent?: string
+}
+
+interface DiagnosisAssistantDraftResult {
+  faultCategory: string
+  probableCause: string
+  riskLevel: WorkorderRiskLevel
+  groundedSuggestion: boolean
+  needParts: boolean
+  suggestedParts: string[]
+  suggestedPartsText: string
+  conclusion: string
 }
 
 interface PersonnelSelectOption {
@@ -799,10 +890,19 @@ const releaseForm = reactive({
 const evidenceDialogVisible = ref(false)
 const imageImportDialogVisible = ref(false)
 const logImportDialogVisible = ref(false)
+const diagnosisAssistantVisible = ref(false)
 const imageUploadList = ref<UploadUserFile[]>([])
 const logUploadList = ref<UploadUserFile[]>([])
 const pendingImageAttachments = ref<WorkorderAttachmentItem[]>([])
 const pendingLogAttachments = ref<WorkorderAttachmentItem[]>([])
+const diagnosisAssistantDraft = ref('')
+const diagnosisAssistantMessages = ref<DiagnosisAssistantMessage[]>([])
+const diagnosisAssistantDraftResult = ref<DiagnosisAssistantDraftResult | null>(null)
+const diagnosisAssistantConversationId = ref<number | null>(null)
+const diagnosisAssistantStreaming = ref(false)
+const diagnosisAssistantBootstrapping = ref(false)
+const diagnosisAssistantContextDirty = ref(false)
+const diagnosisAssistantAbortController = ref<AbortController | null>(null)
 
 const resolvePersonnelDisplayName = (person: PersonnelVO) =>
   person.userName || person.jobTitle || person.bizRoleLabel || `用户#${person.userId}`
@@ -886,6 +986,8 @@ const imageSummaryText = computed(() =>
     ? imageAttachments.value.map((item) => item.name).join(' / ')
     : '当前还没有补录现场图片，可继续补充故障现场照片或截图。'
 )
+const diagnosisAssistantSuggestedPartsText = (parts: string[]) => parts.filter(Boolean).join(' / ')
+
 const activeProcessingStage = computed<ActiveProcessingStage | ''>(() =>
   order.value && PROCESSING_STAGES.includes(order.value.status as ActiveProcessingStage)
     ? (order.value.status as ActiveProcessingStage)
@@ -1257,6 +1359,360 @@ const parsePickItems = (): WorkorderMaterialItem[] =>
       currentInventory: item.currentInventory,
       status: item.currentInventory >= item.pickedQuantity ? 'picked' : 'pending'
     }))
+
+const DIAGNOSIS_ASSISTANT_CONTEXT_MARK = '[DIAGNOSIS_ASSISTANT_CONTEXT]'
+
+const getDiagnosisAssistantStorageKey = () =>
+  order.value ? `yian_workorder_diagnosis_ai_${order.value.id}` : ''
+
+const isDiagnosisAssistantHiddenPrompt = (content?: string) =>
+  !!content && content.startsWith(DIAGNOSIS_ASSISTANT_CONTEXT_MARK)
+
+const stripDiagnosisDraftTag = (content: string) =>
+  content
+    .replace(/<diagnosis_draft>[\s\S]*?<\/diagnosis_draft>/gi, '')
+    .replace(/<diagnosis_draft>[\s\S]*$/gi, '')
+    .trim()
+
+const normalizeDiagnosisAssistantDraft = (payload: Record<string, any>): DiagnosisAssistantDraftResult => {
+  const suggestedParts = Array.isArray(payload.suggestedParts)
+    ? payload.suggestedParts.map((item) => String(item || '').trim()).filter(Boolean)
+    : String(payload.suggestedPartsText || payload.suggestedParts || '')
+        .split(/[\u3001\uFF0C,\n]/)
+        .map((item) => item.trim())
+        .filter(Boolean)
+  return {
+    faultCategory: String(payload.faultCategory || '').trim(),
+    probableCause: String(payload.probableCause || '').trim(),
+    riskLevel: ['high', 'medium', 'low'].includes(payload.riskLevel)
+      ? (payload.riskLevel as WorkorderRiskLevel)
+      : 'medium',
+    groundedSuggestion:
+      payload.groundedSuggestion === true ||
+      String(payload.groundedSuggestion).toLowerCase() === 'true',
+    needParts: payload.needParts === true || String(payload.needParts).toLowerCase() === 'true',
+    suggestedParts,
+    suggestedPartsText:
+      String(payload.suggestedPartsText || '').trim() || diagnosisAssistantSuggestedPartsText(suggestedParts),
+    conclusion: String(payload.conclusion || '').trim()
+  }
+}
+
+const extractDiagnosisDraft = (content: string): DiagnosisAssistantDraftResult | null => {
+  const matched = content.match(/<diagnosis_draft>([\s\S]*?)<\/diagnosis_draft>/i)
+  if (!matched?.[1]) {
+    return null
+  }
+  try {
+    return normalizeDiagnosisAssistantDraft(JSON.parse(matched[1].trim()))
+  } catch (error) {
+    console.warn('[diagnosis-assistant] failed to parse diagnosis draft', error)
+    return null
+  }
+}
+
+const syncDiagnosisAssistantDraftFromMessages = () => {
+  const latestAssistantMessages = [...diagnosisAssistantMessages.value]
+    .reverse()
+    .filter((item) => item.role === 'assistant')
+  for (const item of latestAssistantMessages) {
+    const parsed = extractDiagnosisDraft(item.rawContent || item.content)
+    if (parsed) {
+      diagnosisAssistantDraftResult.value = parsed
+      return
+    }
+  }
+  diagnosisAssistantDraftResult.value = null
+}
+
+const buildDiagnosisAssistantSystemMessage = () => `你是“翼安智链”维修工单里的 AI 初诊助手，服务对象是机务和维修工程师。
+你的目标是基于工单、飞行日志状态、现场附件状态和聊天上下文，持续追问并收敛出可写入初诊表单的结构化结论。
+
+你必须遵守以下规则：
+1. 优先基于当前工单上下文和历史对话判断信息是否充分。
+2. 如果信息不足，只追问最关键的 1 到 3 个问题。
+3. 如果用户补充了新信息，要结合前后文持续修正判断。
+4. 每次回复都必须包含自然语言回复，以及一个 <diagnosis_draft>...</diagnosis_draft> 标签。
+5. diagnosis_draft 中必须是合法 JSON，且必须包含：
+{
+  "faultCategory": "字符串",
+  "probableCause": "字符串",
+  "riskLevel": "high|medium|low",
+  "groundedSuggestion": true,
+  "needParts": true,
+  "suggestedParts": ["字符串"],
+  "conclusion": "字符串"
+}
+6. 即使信息不足，也要输出“当前版本”的 diagnosis_draft，并在自然语言中说明不确定点。
+7. 不能宣称已经自动提交工单，也不能自动推进节点；最终以人工确认提交为准。`
+
+const buildDiagnosisAssistantContextPrompt = (kind: 'initial' | 'refresh') => {
+  if (!order.value) {
+    return `${DIAGNOSIS_ASSISTANT_CONTEXT_MARK}\n当前工单上下文缺失，请提示用户稍后重试。`
+  }
+  const diagnosis = order.value.diagnosis
+  const imageNames = imageAttachments.value.length
+    ? imageAttachments.value.map((item) => item.name).join('、')
+    : '暂无现场附件'
+  const logNames = logAttachments.value.length
+    ? logAttachments.value.map((item) => item.name).join('、')
+    : '暂无飞行日志'
+  const formDraftSummary = [
+    diagnoseForm.faultCategory ? `故障分类：${diagnoseForm.faultCategory}` : '',
+    diagnoseForm.probableCause ? `疑似原因：${diagnoseForm.probableCause}` : '',
+    diagnoseForm.conclusion ? `处理建议：${diagnoseForm.conclusion}` : ''
+  ]
+    .filter(Boolean)
+    .join('；')
+
+  return `${DIAGNOSIS_ASSISTANT_CONTEXT_MARK}
+当前模式：${kind === 'initial' ? '首轮初诊' : '上下文刷新后继续初诊'}
+请基于以下上下文继续完成初诊助手职责：
+
+工单号：${order.value.orderNo}
+设备：${order.value.deviceCode} / ${order.value.deviceName}
+站点：${order.value.siteName}
+任务场景：${taskSceneText.value}
+当前状态：${order.value.statusLabel}
+异常现象：${order.value.symptom}
+现场描述：${order.value.description || '暂无现场描述'}
+飞行日志状态：${logAttachments.value.length ? `已导入（${logNames}）` : '尚未导入原始飞行日志'}
+现场附件状态：${imageAttachments.value.length ? `已导入（${imageNames}）` : '尚未导入现场图片或截图'}
+当前人工表单草稿：${formDraftSummary || '尚未填写'}
+已有历史初诊：${diagnosis ? `${diagnosis.faultCategory} / ${diagnosis.probableCause} / ${diagnosis.conclusion}` : '暂无'}
+
+请先给出当前判断，再提出下一轮最关键的追问；如果信息已经足够，也要直接收敛出可写入初诊表单的 diagnosis_draft。`
+}
+
+const persistDiagnosisAssistantConversationId = (conversationId: number | null) => {
+  const key = getDiagnosisAssistantStorageKey()
+  if (!key) {
+    return
+  }
+  if (conversationId) {
+    window.sessionStorage.setItem(key, String(conversationId))
+  } else {
+    window.sessionStorage.removeItem(key)
+  }
+}
+
+const restoreDiagnosisAssistantConversationId = () => {
+  const key = getDiagnosisAssistantStorageKey()
+  if (!key) {
+    return null
+  }
+  const stored = window.sessionStorage.getItem(key)
+  if (!stored) {
+    return null
+  }
+  const parsed = Number(stored)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+const mapDiagnosisAssistantChatMessage = (item: any): DiagnosisAssistantMessage | null => {
+  if (item?.type === 'user' && isDiagnosisAssistantHiddenPrompt(item.content)) {
+    return null
+  }
+  if (item?.type !== 'user' && item?.type !== 'assistant') {
+    return null
+  }
+  const rawContent = item.content || ''
+  const displayContent =
+    item.type === 'assistant' ? stripDiagnosisDraftTag(rawContent) || rawContent : rawContent
+  return {
+    role: item.type === 'assistant' ? 'assistant' : 'user',
+    title: item.type === 'assistant' ? '诊断助手' : '机务输入',
+    content: displayContent,
+    rawContent
+  }
+}
+
+const syncDiagnosisAssistantMessagesFromConversation = async () => {
+  if (!diagnosisAssistantConversationId.value) {
+    diagnosisAssistantMessages.value = []
+    diagnosisAssistantDraftResult.value = null
+    return
+  }
+  const list = await ChatMessageApi.getChatMessageListByConversationId(diagnosisAssistantConversationId.value)
+  diagnosisAssistantMessages.value = (Array.isArray(list) ? list : [])
+    .map((item) => mapDiagnosisAssistantChatMessage(item))
+    .filter(Boolean) as DiagnosisAssistantMessage[]
+  syncDiagnosisAssistantDraftFromMessages()
+}
+
+const resolveDiagnosisAssistantErrorMessage = (error: any, fallback: string) => {
+  const rawMessage = String(error?.message || error?.response?.data?.msg || fallback || '').trim()
+  if (!rawMessage) {
+    return fallback
+  }
+  if (rawMessage.includes('yudao-module-ai') && rawMessage.includes('已禁用')) {
+    return '当前环境尚未启用 AI 大模型能力，请先在后端配置并启用 AI 模型后再使用初诊助手。'
+  }
+  return rawMessage
+}
+
+const ensureDiagnosisAssistantConversation = async () => {
+  if (!order.value) {
+    throw new Error('当前工单不存在，无法启动初诊助手')
+  }
+  if (!diagnosisAssistantConversationId.value) {
+    diagnosisAssistantConversationId.value = restoreDiagnosisAssistantConversationId()
+  }
+  if (!diagnosisAssistantConversationId.value) {
+    diagnosisAssistantConversationId.value = await ChatConversationApi.createChatConversationMy({})
+  }
+  await ChatConversationApi.updateChatConversationMy({
+    id: diagnosisAssistantConversationId.value,
+    title: `工单初诊助手-${order.value.orderNo}`,
+    systemMessage: buildDiagnosisAssistantSystemMessage(),
+    temperature: 0.2,
+    maxContexts: 20
+  })
+  persistDiagnosisAssistantConversationId(diagnosisAssistantConversationId.value)
+  return diagnosisAssistantConversationId.value
+}
+
+const sendDiagnosisAssistantMessage = async (
+  content: string,
+  options: { hiddenUserMessage?: boolean } = {}
+) => {
+  if (!order.value || diagnosisAssistantStreaming.value) {
+    return
+  }
+  const conversationId = await ensureDiagnosisAssistantConversation()
+  diagnosisAssistantStreaming.value = true
+  diagnosisAssistantAbortController.value = new AbortController()
+  if (!options.hiddenUserMessage) {
+    diagnosisAssistantMessages.value.push({
+      role: 'user',
+      title: '机务输入',
+      content
+    })
+  }
+  const assistantMessage: DiagnosisAssistantMessage = {
+    role: 'assistant',
+    title: '诊断助手',
+    content: '正在结合当前工单上下文分析，请稍候...',
+    rawContent: ''
+  }
+  diagnosisAssistantMessages.value.push(assistantMessage)
+  let fullContent = ''
+  try {
+    await ChatMessageApi.sendChatMessageStream(
+      conversationId,
+      content,
+      diagnosisAssistantAbortController.value,
+      true,
+      false,
+      async (res) => {
+        const { code, data, msg } = JSON.parse(res.data)
+        if (code !== 0) {
+          throw new Error(msg || 'AI 初诊助手调用失败')
+        }
+        if (!data?.receive?.content && !data?.receive?.reasoningContent) {
+          return
+        }
+        fullContent += data.receive.content || ''
+        assistantMessage.rawContent = fullContent
+        assistantMessage.content =
+          stripDiagnosisDraftTag(fullContent) || '正在整理当前初诊草案，请稍候...'
+        const parsed = extractDiagnosisDraft(fullContent)
+        if (parsed) {
+          diagnosisAssistantDraftResult.value = parsed
+        }
+      },
+      (error: any) => {
+        throw error
+      },
+      () => {
+        diagnosisAssistantStreaming.value = false
+      }
+    )
+    assistantMessage.rawContent = fullContent
+    assistantMessage.content = stripDiagnosisDraftTag(fullContent) || assistantMessage.content
+    syncDiagnosisAssistantDraftFromMessages()
+  } catch (error: any) {
+    const tip = resolveDiagnosisAssistantErrorMessage(
+      error,
+      '这轮诊断没有成功发出，请确认 AI 模型已配置，并稍后重试。'
+    )
+    diagnosisAssistantMessages.value.pop()
+    if (!options.hiddenUserMessage) {
+      diagnosisAssistantMessages.value.push({
+        role: 'assistant',
+        title: '诊断助手',
+        content: tip,
+        rawContent: tip
+      })
+    }
+    throw error
+  } finally {
+    diagnosisAssistantStreaming.value = false
+  }
+}
+
+const bootstrapDiagnosisAssistant = async () => {
+  if (!order.value || diagnosisAssistantBootstrapping.value) {
+    return
+  }
+  diagnosisAssistantBootstrapping.value = true
+  try {
+    await ensureDiagnosisAssistantConversation()
+    await syncDiagnosisAssistantMessagesFromConversation()
+    if (!diagnosisAssistantMessages.value.length) {
+      await sendDiagnosisAssistantMessage(buildDiagnosisAssistantContextPrompt('initial'), {
+        hiddenUserMessage: true
+      })
+    } else if (diagnosisAssistantContextDirty.value) {
+      await sendDiagnosisAssistantMessage(buildDiagnosisAssistantContextPrompt('refresh'), {
+        hiddenUserMessage: true
+      })
+    }
+    diagnosisAssistantContextDirty.value = false
+  } finally {
+    diagnosisAssistantBootstrapping.value = false
+  }
+}
+
+const openDiagnosisAssistant = async () => {
+  diagnosisAssistantDraft.value = ''
+  diagnosisAssistantVisible.value = true
+  try {
+    await bootstrapDiagnosisAssistant()
+  } catch (error: any) {
+    const tip = resolveDiagnosisAssistantErrorMessage(error, '初诊助手暂时不可用，请稍后重试')
+    diagnosisAssistantMessages.value = [
+      {
+        role: 'assistant',
+        title: '诊断助手',
+        content: tip,
+        rawContent: tip
+      }
+    ]
+    diagnosisAssistantDraftResult.value = null
+    message.error(tip)
+  }
+}
+
+const handleDiagnosisAssistantReimportLog = () => {
+  diagnosisAssistantVisible.value = false
+  diagnosisAssistantContextDirty.value = true
+  handleImportLog()
+}
+
+const sendDiagnosisAssistantPrompt = async () => {
+  const draft = diagnosisAssistantDraft.value.trim()
+  if (!draft) {
+    message.warning('请先输入补充问题或现场信息')
+    return
+  }
+  diagnosisAssistantDraft.value = ''
+  try {
+    await sendDiagnosisAssistantMessage(draft)
+  } catch (error: any) {
+    message.error(resolveDiagnosisAssistantErrorMessage(error, '初诊助手回复失败，请稍后重试'))
+  }
+}
 
 const handleItemSearch = async (keyword: string) => {
   itemOptionsLoading.value = true
@@ -1717,6 +2173,7 @@ const submitImageImport = async () => {
   imageImportDialogVisible.value = false
   imageUploadList.value = []
   pendingImageAttachments.value = []
+  diagnosisAssistantContextDirty.value = true
   await loadOrder()
 }
 
@@ -1734,18 +2191,42 @@ const submitLogImport = async () => {
   logImportDialogVisible.value = false
   logUploadList.value = []
   pendingLogAttachments.value = []
+  diagnosisAssistantContextDirty.value = true
   await loadOrder()
 }
 
 const applyDiagnosisAssistant = () => {
-  diagnoseForm.faultCategory ||= order.value?.symptom.includes('返航') ? '飞控系统' : '动力系统'
-  diagnoseForm.probableCause ||= `结合“${order.value?.symptom || '当前异常'}”与现场描述，建议优先检查日志中命中的关键部件和返航参数。`
-  diagnoseForm.riskLevel = diagnoseForm.riskLevel || 'medium'
-  diagnoseForm.groundedSuggestion = true
-  diagnoseForm.needParts = true
-  diagnoseForm.suggestedPartsText ||= '标准桨叶套装 x1，减震球 x4'
-  diagnoseForm.conclusion ||= '建议先完成关键易损件检查与更换，再进入维修和后续复检。'
-  message.success('已将初诊助手建议写入表单，可继续人工调整。')
+  if (!diagnosisAssistantDraftResult.value) {
+    message.warning('请先通过初诊助手完成一轮 AI 诊断，再写入当前草案')
+    openDiagnosisAssistant()
+    return
+  }
+  const suggestion = diagnosisAssistantDraftResult.value
+  diagnoseForm.faultCategory = suggestion.faultCategory
+  diagnoseForm.probableCause = suggestion.probableCause
+  diagnoseForm.riskLevel = suggestion.riskLevel
+  diagnoseForm.groundedSuggestion = suggestion.groundedSuggestion
+  diagnoseForm.needParts = suggestion.needParts
+  diagnoseForm.suggestedPartsText = suggestion.suggestedPartsText
+  diagnoseForm.conclusion = suggestion.conclusion
+  message.success('已将 AI 当前收敛出的初诊草案写入表单，可继续人工调整。')
+}
+
+const writeDiagnosisAssistantToDiagnosis = async () => {
+  if (diagnosisAssistantStreaming.value) {
+    message.warning('AI 仍在生成当前诊断结果，请稍候再写入初诊')
+    return
+  }
+  if (diagnosisAssistantDraft.value.trim()) {
+    await sendDiagnosisAssistantPrompt()
+  }
+  if (!diagnosisAssistantDraftResult.value) {
+    message.warning('当前还没有可写入的结构化初诊草案，请继续与初诊助手对话')
+    return
+  }
+  applyDiagnosisAssistant()
+  message.success('已将初诊助手当前对话结果写入初诊表单。')
+  diagnosisAssistantVisible.value = false
 }
 
 const submitAcceptance = async () => {
@@ -1926,7 +2407,9 @@ const handleDrawerSubmit = async () => {
         break
     }
   } catch (error: any) {
-    message.error(error?.message || '提交失败，请稍后重试')
+    if (!error?.message) {
+      message.error('提交失败，请稍后重试')
+    }
   } finally {
     drawerSubmitting.value = false
   }
@@ -1946,11 +2429,20 @@ watch(
     evidenceDialogVisible.value = false
     imageImportDialogVisible.value = false
     logImportDialogVisible.value = false
+    diagnosisAssistantVisible.value = false
     inventoryReferenceDialogVisible.value = false
     imageUploadList.value = []
     logUploadList.value = []
     pendingImageAttachments.value = []
     pendingLogAttachments.value = []
+    diagnosisAssistantDraft.value = ''
+    diagnosisAssistantMessages.value = []
+    diagnosisAssistantDraftResult.value = null
+    diagnosisAssistantConversationId.value = null
+    diagnosisAssistantContextDirty.value = false
+    diagnosisAssistantStreaming.value = false
+    diagnosisAssistantAbortController.value?.abort()
+    diagnosisAssistantAbortController.value = null
     inventoryReferenceRows.value = []
     await loadOrder()
     await openRequestedProcessingDrawer()
@@ -2012,7 +2504,8 @@ watch(
 .action-panel__desc,
 .evidence-item p,
 .drawer-hero__desc,
-.drawer-inline-head p {
+.drawer-inline-head p,
+.diagnosis-assistant__message p {
   color: var(--el-text-color-secondary);
   line-height: 1.7;
   font-size: 12px;
@@ -2025,7 +2518,9 @@ watch(
 
 .detail-card__tags,
 .drawer-hero__chips,
-.drawer-footer {
+.drawer-footer,
+.diagnosis-assistant__chips,
+.diagnosis-assistant__toolbar {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
@@ -2043,6 +2538,105 @@ watch(
   border: 1px solid var(--el-border-color);
   border-radius: 12px;
   background: var(--el-fill-color-blank);
+}
+
+.diagnosis-assistant {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.diagnosis-assistant__toolbar {
+  justify-content: space-between;
+  align-items: center;
+}
+
+.diagnosis-assistant__messages {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.diagnosis-assistant__message {
+  padding: 14px 16px;
+  border: 1px solid var(--el-border-color);
+  border-radius: 14px;
+  background: var(--el-fill-color-blank);
+}
+
+.diagnosis-assistant__message strong {
+  display: inline-block;
+  margin-bottom: 6px;
+  color: var(--el-text-color-primary);
+}
+
+.diagnosis-assistant__message p {
+  margin: 0;
+}
+
+.diagnosis-assistant__message--assistant {
+  background: linear-gradient(180deg, var(--el-color-primary-light-9), #fff);
+}
+
+.diagnosis-assistant__message--user {
+  background: var(--el-fill-color-light);
+}
+
+.diagnosis-assistant__draft {
+  padding: 14px 16px;
+  border: 1px solid var(--el-color-primary-light-5);
+  border-radius: 16px;
+  background: linear-gradient(180deg, var(--el-color-primary-light-9), #fff);
+}
+
+.diagnosis-assistant__draft-title {
+  margin-bottom: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--el-text-color-primary);
+}
+
+.diagnosis-assistant__draft-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 16px;
+}
+
+.diagnosis-assistant__draft-grid > div {
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.85);
+}
+
+.diagnosis-assistant__draft-grid > div.full {
+  grid-column: 1 / -1;
+}
+
+.diagnosis-assistant__draft-grid strong,
+.diagnosis-assistant__draft-grid span {
+  display: block;
+}
+
+.diagnosis-assistant__draft-grid strong {
+  margin-bottom: 6px;
+  font-size: 13px;
+  color: var(--el-text-color-secondary);
+}
+
+.diagnosis-assistant__draft-grid span {
+  line-height: 1.6;
+  color: var(--el-text-color-primary);
+}
+
+.diagnosis-assistant__composer {
+  padding: 14px;
+  border: 1px solid var(--el-border-color);
+  border-radius: 16px;
+  background: var(--el-fill-color-blank);
+}
+
+.diagnosis-assistant__composer .drawer-footer {
+  margin-top: 12px;
 }
 
 .info-field strong {

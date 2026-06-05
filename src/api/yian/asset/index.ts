@@ -510,10 +510,47 @@ export const resolveAssetDeviceProfile = (
   }
 }
 
-export const listAssetBattery = (): AssetBatteryVO[] => batteryAssets.map((item) => ({ ...item }))
+const toAssetBatteryVO = (battery: BackendAssetBatteryVO): AssetBatteryVO => ({
+  id: String(battery.id || battery.batteryCode || ''),
+  batteryCode: battery.batteryCode,
+  serialNumber: battery.serialNumber,
+  model: battery.model,
+  siteName: battery.workshopName || '',
+  linkedDeviceId: battery.linkedDeviceId,
+  linkedDeviceCode: battery.linkedDeviceCode,
+  linkedDeviceName: battery.linkedDeviceName,
+  soh: battery.soh,
+  cycleCount: battery.cycleCount,
+  lastCheckAt: battery.lastCheckAt || battery.lastCheckTime || '',
+  checkSource: battery.checkSource,
+  healthStatus: battery.healthStatus,
+  healthLabel: battery.healthLabel,
+  sourceEvidence: battery.sourceEvidence,
+  recommendation: battery.recommendation
+})
 
-export const listLinkedBatteries = (deviceCode?: string) =>
-  listAssetBattery().filter((item) => item.linkedDeviceCode === deviceCode)
+export const listAssetBattery = (): AssetBatteryVO[] => {
+  const merged = new Map<string, AssetBatteryVO>()
+  batteryAssets.forEach((item) => {
+    merged.set(item.batteryCode, { ...item })
+  })
+  getBatteryArchiveStore().forEach((item) => {
+    if (!item.batteryCode) return
+    merged.set(item.batteryCode, toAssetBatteryVO(item))
+  })
+  return Array.from(merged.values())
+}
+
+export const listLinkedBatteries = (deviceCode?: string, deviceId?: number) =>
+  listAssetBattery().filter((item) => {
+    if (deviceCode && item.linkedDeviceCode === deviceCode) {
+      return true
+    }
+    if (deviceId && item.linkedDeviceId === deviceId) {
+      return true
+    }
+    return false
+  })
 
 type AssetBatteryLike = Partial<BackendAssetBatteryVO> &
   Partial<Omit<AssetBatteryVO, 'id'>> & {

@@ -5,7 +5,12 @@ import type {
   AssetHistoryEventVO,
   AssetInspectionAttachmentVO
 } from '@/api/yian/asset'
-import { listAssetBattery, resolveAssetBatteryProfile, resolveAssetDeviceProfile } from '@/api/yian/asset'
+import {
+  listAssetBattery,
+  listLinkedBatteries,
+  resolveAssetBatteryProfile,
+  resolveAssetDeviceProfile
+} from '@/api/yian/asset'
 import { useCache } from '@/hooks/web/useCache'
 import { MesDvMachineryStatusEnum } from '@/views/mes/utils/constants'
 
@@ -523,6 +528,9 @@ const buildDocumentSummary = (documents: AssetDocumentVO[]) => {
 const buildBaseRecord = (device?: Partial<DvMachineryVO> | null): AssetDeviceMasterRecordVO => {
   const base = resolveAssetDeviceProfile(device)
   const code = device?.code || ''
+  const linkedBatteryCodes = code || device?.id
+    ? listLinkedBatteries(code, device?.id).map((item) => item.batteryCode)
+    : [...base.linkedBatteries]
   const inspections = clone(seededInspections[code] || [])
   const latestInspection = inspections[0]
   const enableStatus: AssetDeviceEnableStatus = 'enabled'
@@ -534,7 +542,7 @@ const buildBaseRecord = (device?: Partial<DvMachineryVO> | null): AssetDeviceMas
     ownerName: base.ownerName,
     enableStatus,
     enableStatusLabel: ENABLE_STATUS_META[enableStatus].label,
-    standardBatteryCodes: [...base.linkedBatteries],
+    standardBatteryCodes: linkedBatteryCodes,
     currentStatus: 'pending_check',
     currentStatusLabel: CURRENT_STATUS_META.pending_check.label,
     currentStatusTagType: CURRENT_STATUS_META.pending_check.tagType,
@@ -553,7 +561,7 @@ const buildBaseRecord = (device?: Partial<DvMachineryVO> | null): AssetDeviceMas
     warnings: [...base.warnings],
     missingItems: [...base.missingItems],
     workorderSummary: base.workorderSummary,
-    linkedBatteries: [...base.linkedBatteries],
+    linkedBatteries: linkedBatteryCodes,
     documents: clone(base.documents),
     history: clone(base.history),
     inspections,

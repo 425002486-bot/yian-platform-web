@@ -75,6 +75,22 @@ const setBatteryArchiveStore = (value: AssetBatteryVO[]) => {
   )
 }
 
+const mergeRemoteBatteryArchive = (list: AssetBatteryVO[]) => {
+  const mergedMap = new Map<string, AssetBatteryVO>()
+  getBatteryArchiveStore().forEach((item) => {
+    mergedMap.set(normalizeBatteryCode(item.batteryCode), cloneBatteryRecord(item))
+  })
+  list.forEach((item) => {
+    mergedMap.set(normalizeBatteryCode(item.batteryCode), cloneBatteryRecord(item))
+  })
+  const nextStore = Array.from(mergedMap.values()).sort((a, b) => {
+    const timeA = new Date(a.lastCheckAt || a.lastCheckTime || 0).getTime()
+    const timeB = new Date(b.lastCheckAt || b.lastCheckTime || 0).getTime()
+    return timeB - timeA
+  })
+  setBatteryArchiveStore(nextStore)
+}
+
 const buildSeedBatteryList = (): AssetBatteryVO[] => {
   const workshops = LocalDemoMesApi.listWorkshops()
   return listAssetBattery().map((item, index) => {
@@ -215,7 +231,9 @@ export const YianAssetApi = {
     }
     try {
       const response = (await request.get({ url: '/yian/asset/battery/list', params })) as AssetBatteryVO[]
-      return mergeBatteryArchiveList(response || [])
+      const mergedList = mergeBatteryArchiveList(response || [])
+      mergeRemoteBatteryArchive(mergedList)
+      return mergedList
     } catch (error) {
       if (isLocalMesDemoEnabled()) {
         return getMergedLocalBatteryList()
@@ -244,7 +262,9 @@ export const YianAssetApi = {
             item.id === response.id ||
             normalizeBatteryCode(item.batteryCode) === normalizeBatteryCode(response.batteryCode)
         )
-        return localOverride ? cloneBatteryRecord(localOverride) : response
+        const nextRecord = localOverride ? cloneBatteryRecord(localOverride) : response
+        mergeRemoteBatteryArchive([nextRecord])
+        return nextRecord
       }
     } catch (error) {
       if (!isLocalMesDemoEnabled()) {
