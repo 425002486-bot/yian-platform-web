@@ -182,6 +182,7 @@ import {
   saveAssetDeviceMasterRecord,
   type AssetDeviceEnableStatus
 } from '@/api/yian/asset/deviceMaster'
+import { YianAssetApi, type AssetBatterySaveReqVO } from '@/api/yian/asset/backend'
 import { getPersonnelPage, type PersonnelVO } from '@/api/yian/config/personnel'
 import { buildPersonnelOptions } from '@/utils/yian/personnel'
 import DvMachineryTypeSelect from '@/views/mes/dv/machinery/type/components/DvMachineryTypeSelect.vue'
@@ -403,6 +404,46 @@ defineExpose({ open })
 
 const emit = defineEmits(['success'])
 
+const syncLinkedBatteries = async (
+  machineryId: number,
+  machineryCode: string,
+  selectedBatteryCodes: string[],
+  workshopId: number
+) => {
+  const selectedCodeSet = new Set(selectedBatteryCodes.map((item) => normalizeIdentityValue(item)))
+  const batteryList = await YianAssetApi.getBatteryList()
+  const relatedBatteries = batteryList.filter((item) => {
+    const normalizedCode = normalizeIdentityValue(item.batteryCode)
+    const selectedForCurrentDevice = selectedCodeSet.has(normalizedCode)
+    const currentlyLinkedToDevice =
+      item.linkedDeviceId === machineryId || normalizeIdentityValue(item.linkedDeviceCode) === normalizeIdentityValue(machineryCode)
+    return selectedForCurrentDevice || currentlyLinkedToDevice
+  })
+
+  await Promise.all(
+    relatedBatteries.map((item) => {
+      const shouldLink = selectedCodeSet.has(normalizeIdentityValue(item.batteryCode))
+      const payload: AssetBatterySaveReqVO = {
+        id: item.id,
+        batteryCode: item.batteryCode,
+        serialNumber: item.serialNumber,
+        model: item.model,
+        workshopId: item.workshopId || workshopId,
+        linkedDeviceId: shouldLink ? machineryId : undefined,
+        soh: item.soh,
+        cycleCount: item.cycleCount,
+        lastCheckTime: item.lastCheckAt || item.lastCheckTime,
+        checkSource: item.checkSource,
+        healthStatus: item.healthStatus,
+        sourceEvidence: item.sourceEvidence,
+        recommendation: item.recommendation,
+        remark: item.remark
+      }
+      return YianAssetApi.updateBattery(payload)
+    })
+  )
+}
+
 const submitForm = async () => {
   await formRef.value.validate()
   formLoading.value = true
@@ -431,12 +472,23 @@ const submitForm = async () => {
       remark: formData.value.remark || ''
     }
 
+    let machineryId = formData.value.id as number
+
     if (formType.value === 'create') {
-      await DvMachineryApi.createMachinery(payload)
+      machineryId = await DvMachineryApi.createMachinery(payload)
       message.success(t('common.createSuccess'))
     } else {
       await DvMachineryApi.updateMachinery(payload)
       message.success(t('common.updateSuccess'))
+    }
+
+    if (showStandardBatteryField.value && machineryId) {
+      await syncLinkedBatteries(
+        machineryId,
+        formData.value.code || '',
+        standardBatteryCodes,
+        payload.workshopId as number
+      )
     }
 
     saveAssetDeviceMasterRecord(payload, {

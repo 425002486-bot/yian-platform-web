@@ -133,6 +133,7 @@
 </template>
 
 <script lang="ts" setup>
+import { onActivated } from 'vue'
 import { ContentWrap } from '@/components/ContentWrap'
 import { DvMachineryApi, DvMachineryVO } from '@/api/mes/dv/machinery'
 import {
@@ -159,6 +160,7 @@ const loading = ref(false)
 const device = ref<MachineryDetail | null>(null)
 const record = ref<AssetDeviceMasterRecordVO>(resolveAssetDeviceMasterRecord(null))
 const formRef = ref()
+const hasLoaded = ref(false)
 
 const isAircraftDevice = computed(
   () => device.value?.machineryTypeName === AIRCRAFT_MACHINERY_TYPE_NAME
@@ -254,6 +256,7 @@ const getDetail = async () => {
     device.value = data
     record.value = resolveAssetDeviceMasterRecord(data)
     record.value = await refreshAssetDeviceRuleRecord(data)
+    hasLoaded.value = true
   } finally {
     loading.value = false
   }
@@ -313,6 +316,13 @@ watch(
   },
   { immediate: true }
 )
+
+onActivated(() => {
+  if (!hasLoaded.value) {
+    return
+  }
+  getDetail()
+})
 </script>
 
 <style lang="scss" scoped>
