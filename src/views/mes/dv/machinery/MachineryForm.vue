@@ -106,9 +106,7 @@
               v-model="formData.standardBatteryCodes"
               multiple
               filterable
-              allow-create
-              default-first-option
-              placeholder="录入或选择标配电池 SN"
+              placeholder="请选择标配电池"
               class="!w-1/1"
             >
               <el-option
@@ -177,7 +175,6 @@ import { MdWorkshopApi, type MdWorkshopVO } from '@/api/mes/md/workstation/works
 import {
   ASSET_DEVICE_ENABLE_STATUS_OPTIONS,
   getMachineryStatusByEnableStatus,
-  listDeviceBatteryOptions,
   resolveAssetDeviceMasterRecord,
   saveAssetDeviceMasterRecord,
   type AssetDeviceEnableStatus
@@ -231,7 +228,7 @@ const dialogTitle = computed(() => {
 const formRef = ref()
 const workshopOptions = ref<MdWorkshopVO[]>([])
 const personnelOptions = ref<PersonnelVO[]>([])
-const batteryOptions = computed(() => listDeviceBatteryOptions())
+const batteryOptions = ref<Array<{ label: string; value: string }>>([])
 const previousCode = ref('')
 const documentCount = ref(0)
 
@@ -285,6 +282,14 @@ const loadPersonnelOptions = async () => {
   } catch {
     personnelOptions.value = []
   }
+}
+
+const loadBatteryOptions = async () => {
+  const batteryList = await YianAssetApi.getBatteryList()
+  batteryOptions.value = batteryList.map((item) => ({
+    label: `${item.batteryCode} / ${item.serialNumber}`,
+    value: item.batteryCode
+  }))
 }
 
 const syncWorkshopMeta = (preferDefaultOwner = false) => {
@@ -370,7 +375,7 @@ const open = async (type: 'create' | 'update' | 'detail', id?: number) => {
   dialogVisible.value = true
   formType.value = type
   resetForm()
-  await Promise.all([loadWorkshopOptions(), loadPersonnelOptions()])
+  await Promise.all([loadWorkshopOptions(), loadPersonnelOptions(), loadBatteryOptions()])
   if (!id) return
   formLoading.value = true
   try {
@@ -404,14 +409,35 @@ defineExpose({ open })
 
 const emit = defineEmits(['success'])
 
+const resolveSelectedBatteryCodes = (
+  selectedValues: string[],
+  batteryList: Awaited<ReturnType<typeof YianAssetApi.getBatteryList>>
+) => {
+  const resolvedCodes = new Set<string>()
+  selectedValues.forEach((value) => {
+    const normalizedValue = normalizeIdentityValue(value)
+    if (!normalizedValue) return
+    const matchedBattery = batteryList.find(
+      (item) =>
+        normalizeIdentityValue(item.batteryCode) === normalizedValue ||
+        normalizeIdentityValue(item.serialNumber) === normalizedValue
+    )
+    if (matchedBattery?.batteryCode) {
+      resolvedCodes.add(matchedBattery.batteryCode)
+    }
+  })
+  return [...resolvedCodes]
+}
+
 const syncLinkedBatteries = async (
   machineryId: number,
   machineryCode: string,
   selectedBatteryCodes: string[],
   workshopId: number
 ) => {
-  const selectedCodeSet = new Set(selectedBatteryCodes.map((item) => normalizeIdentityValue(item)))
   const batteryList = await YianAssetApi.getBatteryList()
+  const resolvedBatteryCodes = resolveSelectedBatteryCodes(selectedBatteryCodes, batteryList)
+  const selectedCodeSet = new Set(resolvedBatteryCodes.map((item) => normalizeIdentityValue(item)))
   const relatedBatteries = batteryList.filter((item) => {
     const normalizedCode = normalizeIdentityValue(item.batteryCode)
     const selectedForCurrentDevice = selectedCodeSet.has(normalizedCode)
@@ -449,8 +475,11 @@ const submitForm = async () => {
   formLoading.value = true
   try {
     await assertUniqueIdentity()
+    const currentBatteryList = showStandardBatteryField.value
+      ? await YianAssetApi.getBatteryList()
+      : []
     const standardBatteryCodes = showStandardBatteryField.value
-      ? [...formData.value.standardBatteryCodes]
+      ? resolveSelectedBatteryCodes(formData.value.standardBatteryCodes, currentBatteryList)
       : []
 
     const payload: DvMachineryVO = {

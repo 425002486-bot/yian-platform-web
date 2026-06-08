@@ -453,6 +453,27 @@ const handleSubmitInspection = async () => {
       attachments
     })
     message.success('电池巡检已提交。')
+    const refreshedBattery = (await YianAssetApi.getBatteryList()).find(
+      (item) => item.id === battery.value?.id || item.batteryCode === battery.value?.batteryCode
+    )
+    if (refreshedBattery?.id) {
+      await YianAssetApi.updateBattery({
+        id: refreshedBattery.id,
+        batteryCode: refreshedBattery.batteryCode,
+        serialNumber: refreshedBattery.serialNumber,
+        model: refreshedBattery.model,
+        workshopId: refreshedBattery.workshopId,
+        linkedDeviceId: refreshedBattery.linkedDeviceId,
+        soh: refreshedBattery.soh,
+        cycleCount: refreshedBattery.cycleCount,
+        lastCheckTime: refreshedBattery.lastCheckAt || refreshedBattery.lastCheckTime,
+        checkSource: refreshedBattery.checkSource,
+        healthStatus: refreshedBattery.healthStatus,
+        sourceEvidence: refreshedBattery.sourceEvidence,
+        recommendation: refreshedBattery.recommendation,
+        remark: refreshedBattery.remark
+      })
+    }
     router.push(`/asset/battery/detail/${getBatteryId()}`)
   } finally {
     submitLoading.value = false

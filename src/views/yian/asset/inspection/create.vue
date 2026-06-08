@@ -730,19 +730,40 @@ const handleSubmitInspection = async () => {
     }
 
     if (assetType.value === 'battery' && battery.value?.batteryCode) {
-        const parsedMetrics = await parseBatteryAttachmentMetrics(inspectionForm.value.uploadFiles)
-        submitAssetBatteryInspection(battery.value.batteryCode, {
-          batteryCode: battery.value.batteryCode,
-          inspectedAt,
-          inspector: inspectionForm.value.inspector,
-          source: inspectionForm.value.inspectionMode,
-          conclusion: finalConclusion,
-          summary,
-          notes: inspectionForm.value.notes,
-          attachments,
-          parsedMetrics
+      const parsedMetrics = await parseBatteryAttachmentMetrics(inspectionForm.value.uploadFiles)
+      submitAssetBatteryInspection(battery.value.batteryCode, {
+        batteryCode: battery.value.batteryCode,
+        inspectedAt,
+        inspector: inspectionForm.value.inspector,
+        source: inspectionForm.value.inspectionMode,
+        conclusion: finalConclusion,
+        summary,
+        notes: inspectionForm.value.notes,
+        attachments,
+        parsedMetrics
+      })
+      const refreshedBattery = (await YianAssetApi.getBatteryList()).find(
+        (item) => item.id === battery.value?.id || item.batteryCode === battery.value?.batteryCode
+      )
+      if (refreshedBattery?.id) {
+        await YianAssetApi.updateBattery({
+          id: refreshedBattery.id,
+          batteryCode: refreshedBattery.batteryCode,
+          serialNumber: refreshedBattery.serialNumber,
+          model: refreshedBattery.model,
+          workshopId: refreshedBattery.workshopId,
+          linkedDeviceId: refreshedBattery.linkedDeviceId,
+          soh: refreshedBattery.soh,
+          cycleCount: refreshedBattery.cycleCount,
+          lastCheckTime: refreshedBattery.lastCheckAt || refreshedBattery.lastCheckTime,
+          checkSource: refreshedBattery.checkSource,
+          healthStatus: refreshedBattery.healthStatus,
+          sourceEvidence: refreshedBattery.sourceEvidence,
+          recommendation: refreshedBattery.recommendation,
+          remark: refreshedBattery.remark
         })
-      message.success('巡检已提交。')
+      }
+      message.success('电池巡检已提交。')
       router.push({
         path: '/asset/inspection',
         query: {

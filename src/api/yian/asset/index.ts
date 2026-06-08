@@ -1,6 +1,7 @@
 ﻿import dayjs from 'dayjs'
 import type { DvMachineryVO } from '@/api/mes/dv/machinery'
 import type { AssetBatteryVO as BackendAssetBatteryVO } from '@/api/yian/asset/backend'
+import { isLocalMesDemoEnabled } from '@/api/mes/localDemo'
 import { useCache } from '@/hooks/web/useCache'
 import { evaluateBatteryRule, yianRuleRuntimeVersion } from '@/api/yian/config/rule'
 
@@ -550,14 +551,20 @@ const applyBatteryRule = (battery: AssetBatteryVO): AssetBatteryVO => {
 export const listAssetBattery = (): AssetBatteryVO[] => {
   void yianRuleRuntimeVersion.value
   const merged = new Map<string, AssetBatteryVO>()
-  batteryAssets.forEach((item) => {
-    merged.set(item.batteryCode, applyBatteryRule({ ...item }))
-  })
+  if (isLocalMesDemoEnabled()) {
+    batteryAssets.forEach((item) => {
+      merged.set(item.batteryCode, applyBatteryRule({ ...item }))
+    })
+  }
   getBatteryArchiveStore().forEach((item) => {
     if (!item.batteryCode) return
     merged.set(item.batteryCode, applyBatteryRule(toAssetBatteryVO(item)))
   })
-  return Array.from(merged.values())
+  return Array.from(merged.values()).sort((left, right) => {
+    const leftTime = dayjs(left.createTime || left.lastCheckAt || 0).valueOf()
+    const rightTime = dayjs(right.createTime || right.lastCheckAt || 0).valueOf()
+    return rightTime - leftTime
+  })
 }
 
 export const listLinkedBatteries = (deviceCode?: string, deviceId?: number) =>

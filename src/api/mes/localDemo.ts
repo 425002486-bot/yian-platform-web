@@ -51,8 +51,7 @@ const STORAGE_KEY = 'yian_mes_local_demo_v1'
 const { wsCache } = useCache()
 
 export const isLocalMesDemoEnabled = () => {
-  const baseUrl = String(import.meta.env.VITE_BASE_URL || '')
-  return import.meta.env.DEV && baseUrl.includes('localhost:48080')
+  return String(import.meta.env.VITE_MES_LOCAL_DEMO || '').toLowerCase() === 'true'
 }
 
 const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value))

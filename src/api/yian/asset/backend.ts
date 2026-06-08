@@ -305,9 +305,6 @@ export const YianAssetApi = {
 
   getBatteryList: async (params?: Record<string, unknown>) => {
     await syncRuleRuntimeConfig()
-    if (isLocalMesDemoEnabled()) {
-      return getMergedLocalBatteryList().map(applyBatteryRule)
-    }
     try {
       const response = (await request.get({ url: '/yian/asset/battery/list', params })) as AssetBatteryVO[]
       const mergedList = mergeBatteryArchiveList(response || [], false)
@@ -356,10 +353,6 @@ export const YianAssetApi = {
   },
 
   createBattery: async (data: AssetBatterySaveReqVO) => {
-    if (isLocalMesDemoEnabled()) {
-      return upsertLocalBatteryRecord(data).id
-    }
-
     try {
       const response = await request.post({ url: '/yian/asset/battery/create', data })
       const nextId = typeof response === 'number' ? response : undefined
@@ -374,11 +367,6 @@ export const YianAssetApi = {
   },
 
   updateBattery: async (data: AssetBatterySaveReqVO) => {
-    if (isLocalMesDemoEnabled()) {
-      upsertLocalBatteryRecord(data)
-      return true
-    }
-
     try {
       const response = await request.put({ url: '/yian/asset/battery/update', data })
       upsertLocalBatteryRecord(data)
