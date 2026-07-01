@@ -1,12 +1,18 @@
 <template>
   <ContentWrap>
     <div class="yian-prototype-page yian-workorder-detail-page">
-      <el-page-header @back="router.push('/workorder/list')" title="返回工单列表" content="工单详情">
+      <el-page-header
+        @back="router.push('/workorder/list')"
+        title="返回工单列表"
+        content="工单详情"
+      >
         <template #extra>
           <el-space wrap>
             <el-tag effect="plain">{{ order?.siteName || '待补录站点' }}</el-tag>
             <el-tag effect="plain">{{ order?.owner || '待分派负责人' }}</el-tag>
-            <el-button type="primary" @click="router.push('/workorder/list')">进入工单中心</el-button>
+            <el-button type="primary" @click="router.push('/workorder/list')"
+              >进入工单中心</el-button
+            >
           </el-space>
         </template>
       </el-page-header>
@@ -19,7 +25,8 @@
             <div>
               <div class="detail-card__title">工单 {{ order.orderNo }}</div>
               <div class="detail-card__meta">
-                设备 {{ order.deviceCode }} / {{ order.siteName }} / {{ taskSceneText }} / {{ order.symptom }}
+                设备 {{ order.deviceCode }} / {{ order.siteName }} / {{ taskSceneText }} /
+                {{ order.symptom }}
               </div>
             </div>
             <div class="detail-card__tags">
@@ -84,7 +91,9 @@
                   </template>
 
                   <div class="history-stage-card">
-                    <p v-if="card.summary" class="history-stage-card__summary">{{ card.summary }}</p>
+                    <p v-if="card.summary" class="history-stage-card__summary">{{
+                      card.summary
+                    }}</p>
                     <div class="info-grid info-grid--compact">
                       <div
                         v-for="field in card.fields"
@@ -151,7 +160,11 @@
                 <div class="action-panel__title">{{ currentAction.title }}</div>
                 <p class="action-panel__desc">{{ currentAction.description }}</p>
                 <el-space wrap>
-                  <el-button v-if="currentAction.primaryText" type="primary" @click="handlePrimaryAction">
+                  <el-button
+                    v-if="currentAction.primaryText"
+                    type="primary"
+                    @click="handlePrimaryAction"
+                  >
                     {{ currentAction.primaryText }}
                   </el-button>
                 </el-space>
@@ -186,13 +199,19 @@
         >
           <div class="el-upload__text">将现场图片拖到此处，或 <em>点击选择文件</em></div>
           <template #tip>
-            <div class="el-upload__tip">支持 JPG、PNG、WebP 等图片格式，建议补充故障现场照片与截图</div>
+            <div class="el-upload__tip"
+              >支持 JPG、PNG、WebP 等图片格式，建议补充故障现场照片与截图</div
+            >
           </template>
         </el-upload>
         <template #footer>
           <el-space wrap>
             <el-button @click="imageImportDialogVisible = false">取消</el-button>
-            <el-button type="primary" :disabled="!imageUploadList.length" @click="submitImageImport">
+            <el-button
+              type="primary"
+              :disabled="!imageUploadList.length"
+              @click="submitImageImport"
+            >
               确认补录
             </el-button>
           </el-space>
@@ -240,7 +259,10 @@
           <el-table-column label="当前库存" width="110" prop="quantity" />
           <el-table-column label="单位" width="90" prop="unitMeasureName" />
         </el-table>
-        <el-empty v-if="!inventoryReferenceLoading && !inventoryReferenceRows.length" description="当前没有匹配到库存参考数据" />
+        <el-empty
+          v-if="!inventoryReferenceLoading && !inventoryReferenceRows.length"
+          description="当前没有匹配到库存参考数据"
+        />
         <template #footer>
           <el-space wrap>
             <el-button @click="inventoryReferenceDialogVisible = false">关闭</el-button>
@@ -253,16 +275,30 @@
         <div v-if="order" class="diagnosis-assistant">
           <div class="diagnosis-assistant__toolbar">
             <div class="diagnosis-assistant__chips">
-              <el-tag effect="plain" :type="logAttachments.length ? 'success' : 'info'">
-                {{ logAttachments.length ? `已关联飞行日志 ${logAttachments.length} 份` : '暂未关联飞行日志' }}
+              <el-tag effect="plain" :type="diagnosisAssistantHasLogContext ? 'success' : 'info'">
+                {{ diagnosisAssistantLogContextLabel }}
               </el-tag>
               <el-tag effect="plain" :type="imageAttachments.length ? 'success' : 'info'">
-                {{ imageAttachments.length ? `已读取现场附件 ${imageAttachments.length} 份` : '暂未读取现场附件' }}
+                {{
+                  imageAttachments.length
+                    ? `已读取现场附件 ${imageAttachments.length} 份`
+                    : '暂未读取现场附件'
+                }}
               </el-tag>
               <el-tag effect="plain">当前工单：{{ order.orderNo }}</el-tag>
             </div>
             <el-button @click="handleDiagnosisAssistantReimportLog">重新导入日志</el-button>
           </div>
+
+          <el-alert
+            v-if="flightLogAssistantSummary"
+            class="mb-12px"
+            type="info"
+            :closable="false"
+            show-icon
+            title="已加载最近一次 AI 日志解析摘要"
+            :description="flightLogAssistantSummary"
+          />
 
           <div class="diagnosis-assistant__messages">
             <div
@@ -279,13 +315,36 @@
           <div v-if="diagnosisAssistantDraftResult" class="diagnosis-assistant__draft">
             <div class="diagnosis-assistant__draft-title">当前初诊草案</div>
             <div class="diagnosis-assistant__draft-grid">
-              <div><strong>故障分类</strong><span>{{ diagnosisAssistantDraftResult.faultCategory }}</span></div>
-              <div><strong>风险等级</strong><span>{{ riskLevelLabel(diagnosisAssistantDraftResult.riskLevel) }}</span></div>
-              <div><strong>停飞建议</strong><span>{{ diagnosisAssistantDraftResult.groundedSuggestion ? '建议停飞' : '可继续观察' }}</span></div>
-              <div><strong>是否需要备件</strong><span>{{ diagnosisAssistantDraftResult.needParts ? '是' : '否' }}</span></div>
-              <div class="full"><strong>疑似原因</strong><span>{{ diagnosisAssistantDraftResult.probableCause }}</span></div>
-              <div class="full"><strong>建议领料清单</strong><span>{{ diagnosisAssistantDraftResult.suggestedPartsText || '无' }}</span></div>
-              <div class="full"><strong>处理建议</strong><span>{{ diagnosisAssistantDraftResult.conclusion }}</span></div>
+              <div
+                ><strong>故障分类</strong
+                ><span>{{ diagnosisAssistantDraftResult.faultCategory }}</span></div
+              >
+              <div
+                ><strong>风险等级</strong
+                ><span>{{ riskLevelLabel(diagnosisAssistantDraftResult.riskLevel) }}</span></div
+              >
+              <div
+                ><strong>停飞建议</strong
+                ><span>{{
+                  diagnosisAssistantDraftResult.groundedSuggestion ? '建议停飞' : '可继续观察'
+                }}</span></div
+              >
+              <div
+                ><strong>是否需要备件</strong
+                ><span>{{ diagnosisAssistantDraftResult.needParts ? '是' : '否' }}</span></div
+              >
+              <div class="full"
+                ><strong>疑似原因</strong
+                ><span>{{ diagnosisAssistantDraftResult.probableCause }}</span></div
+              >
+              <div class="full"
+                ><strong>建议领料清单</strong
+                ><span>{{ diagnosisAssistantDraftResult.suggestedPartsText || '无' }}</span></div
+              >
+              <div class="full"
+                ><strong>处理建议</strong
+                ><span>{{ diagnosisAssistantDraftResult.conclusion }}</span></div
+              >
             </div>
           </div>
 
@@ -344,10 +403,20 @@
                 </el-radio-group>
               </el-form-item>
               <el-form-item label="是否停飞">
-                <el-switch v-model="acceptForm.grounded" inline-prompt active-text="停飞" inactive-text="不停飞" />
+                <el-switch
+                  v-model="acceptForm.grounded"
+                  inline-prompt
+                  active-text="停飞"
+                  inactive-text="不停飞"
+                />
               </el-form-item>
               <el-form-item label="机务负责人">
-                <el-select v-model="acceptForm.dispatcher" filterable placeholder="选择机务负责人" class="!w-100%">
+                <el-select
+                  v-model="acceptForm.dispatcher"
+                  filterable
+                  placeholder="选择机务负责人"
+                  class="!w-100%"
+                >
                   <el-option
                     v-for="item in dispatcherOptions"
                     :key="`dispatcher-${item.userId}`"
@@ -357,7 +426,12 @@
                 </el-select>
               </el-form-item>
               <el-form-item label="维修责任人">
-                <el-select v-model="acceptForm.assignee" filterable placeholder="选择维修责任人" class="!w-100%">
+                <el-select
+                  v-model="acceptForm.assignee"
+                  filterable
+                  placeholder="选择维修责任人"
+                  class="!w-100%"
+                >
                   <el-option
                     v-for="item in assigneeOptions"
                     :key="`assignee-${item.userId}`"
@@ -392,23 +466,43 @@
                 />
               </el-form-item>
               <el-form-item label="受理备注">
-                <el-input v-model="acceptForm.remark" type="textarea" :rows="3" placeholder="补充受理、停飞和分派说明" />
+                <el-input
+                  v-model="acceptForm.remark"
+                  type="textarea"
+                  :rows="3"
+                  placeholder="补充受理、停飞和分派说明"
+                />
               </el-form-item>
             </el-form>
 
-            <el-form v-else-if="order.status === 'diagnosing'" :model="diagnoseForm" label-width="110px">
+            <el-form
+              v-else-if="order.status === 'diagnosing'"
+              :model="diagnoseForm"
+              label-width="110px"
+            >
               <div class="drawer-inline-head">
                 <div>
                   <div class="drawer-inline-head__title">初诊助手</div>
                   <p>先结合飞行日志、现场附件和机务补充信息形成初诊建议，再由人工确认初诊结果。</p>
                 </div>
                 <el-space wrap>
-                  <el-button type="primary" plain @click="openDiagnosisAssistant">初诊助手</el-button>
-                  <el-button :disabled="!diagnosisAssistantDraftResult" @click="applyDiagnosisAssistant">写入当前草案</el-button>
+                  <el-button type="primary" plain @click="openDiagnosisAssistant"
+                    >初诊助手</el-button
+                  >
+                  <el-button
+                    :disabled="!diagnosisAssistantDraftResult"
+                    @click="applyDiagnosisAssistant"
+                    >写入当前草案</el-button
+                  >
                 </el-space>
               </div>
               <el-form-item label="初诊人">
-                <el-select v-model="diagnoseForm.engineer" filterable placeholder="选择初诊人" class="!w-100%">
+                <el-select
+                  v-model="diagnoseForm.engineer"
+                  filterable
+                  placeholder="选择初诊人"
+                  class="!w-100%"
+                >
                   <el-option
                     v-for="item in engineerOptions"
                     :key="`engineer-${item.userId}`"
@@ -418,7 +512,10 @@
                 </el-select>
               </el-form-item>
               <el-form-item label="故障分类">
-                <el-input v-model="diagnoseForm.faultCategory" placeholder="如：飞控系统、动力系统" />
+                <el-input
+                  v-model="diagnoseForm.faultCategory"
+                  placeholder="如：飞控系统、动力系统"
+                />
               </el-form-item>
               <el-form-item label="疑似原因">
                 <el-input
@@ -458,7 +555,12 @@
                 />
               </el-form-item>
               <el-form-item label="处理建议">
-                <el-input v-model="diagnoseForm.conclusion" type="textarea" :rows="3" placeholder="填写维修前建议和后续处理路径" />
+                <el-input
+                  v-model="diagnoseForm.conclusion"
+                  type="textarea"
+                  :rows="3"
+                  placeholder="填写维修前建议和后续处理路径"
+                />
               </el-form-item>
             </el-form>
 
@@ -466,7 +568,9 @@
               <div class="drawer-inline-head">
                 <div>
                   <div class="drawer-inline-head__title">多项领料清单</div>
-                  <p>系统已按初诊建议带入清单，默认只需要确认本次实领数量；若需补充，再新增备件或查看库存参考。</p>
+                  <p
+                    >系统已按初诊建议带入清单，默认只需要确认本次实领数量；若需补充，再新增备件或查看库存参考。</p
+                  >
                 </div>
                 <el-space wrap>
                   <el-button @click="seedPickItemsFromDiagnosis">重新带入建议</el-button>
@@ -475,7 +579,12 @@
                 </el-space>
               </div>
               <el-form-item label="领料人">
-                <el-select v-model="pickForm.picker" filterable placeholder="选择领料人" class="!w-100%">
+                <el-select
+                  v-model="pickForm.picker"
+                  filterable
+                  placeholder="选择领料人"
+                  class="!w-100%"
+                >
                   <el-option
                     v-for="item in pickerOptions"
                     :key="`picker-${item.userId}`"
@@ -485,7 +594,11 @@
                 </el-select>
               </el-form-item>
               <div v-if="pickForm.items.length" class="pick-items">
-                <div v-for="(item, index) in pickForm.items" :key="`pick-item-${index}`" class="pick-item-card">
+                <div
+                  v-for="(item, index) in pickForm.items"
+                  :key="`pick-item-${index}`"
+                  class="pick-item-card"
+                >
                   <div class="pick-item-card__head">
                     <span>备件 {{ index + 1 }}</span>
                     <el-tag size="small" effect="plain" :type="item.manual ? 'warning' : 'info'">
@@ -517,7 +630,9 @@
                           >
                             <div class="pick-option">
                               <span>{{ option.name }}</span>
-                              <span class="pick-option__meta">{{ option.specification || '-' }}</span>
+                              <span class="pick-option__meta">{{
+                                option.specification || '-'
+                              }}</span>
                             </div>
                           </el-option>
                         </el-select>
@@ -526,7 +641,11 @@
                     </el-col>
                     <el-col :span="12">
                       <el-form-item label="规格" label-width="60px">
-                        <el-input v-model="item.spec" :disabled="!item.manual" placeholder="规格/型号" />
+                        <el-input
+                          v-model="item.spec"
+                          :disabled="!item.manual"
+                          placeholder="规格/型号"
+                        />
                       </el-form-item>
                     </el-col>
                     <el-col :span="24">
@@ -542,7 +661,11 @@
                         </div>
                         <div class="pick-item-card__quantity-inline">
                           <span class="pick-item-card__quantity-label">本次实领</span>
-                          <el-input-number v-model="item.pickedQuantity" :min="0" :max="item.currentInventory" />
+                          <el-input-number
+                            v-model="item.pickedQuantity"
+                            :min="0"
+                            :max="item.currentInventory"
+                          />
                         </div>
                       </div>
                     </el-col>
@@ -555,9 +678,18 @@
               <el-empty v-else description="当前还没有领料项，请先带入初诊建议或新增备件" />
             </el-form>
 
-            <el-form v-else-if="order.status === 'repairing'" :model="repairForm" label-width="110px">
+            <el-form
+              v-else-if="order.status === 'repairing'"
+              :model="repairForm"
+              label-width="110px"
+            >
               <el-form-item label="维修责任人">
-                <el-select v-model="repairForm.technician" filterable placeholder="选择维修责任人" class="!w-100%">
+                <el-select
+                  v-model="repairForm.technician"
+                  filterable
+                  placeholder="选择维修责任人"
+                  class="!w-100%"
+                >
                   <el-option
                     v-for="item in technicianOptions"
                     :key="`technician-${item.userId}`"
@@ -570,7 +702,12 @@
                 <el-input :model-value="usedPartsSummary" disabled />
               </el-form-item>
               <el-form-item label="工时">
-                <el-input-number v-model="repairForm.usedHours" :min="1" :max="24" class="!w-100%" />
+                <el-input-number
+                  v-model="repairForm.usedHours"
+                  :min="1"
+                  :max="24"
+                  class="!w-100%"
+                />
               </el-form-item>
               <el-form-item label="维修动作">
                 <el-input
@@ -590,7 +727,11 @@
               </el-form-item>
             </el-form>
 
-            <el-form v-else-if="order.status === 'inspecting'" :model="inspectForm" label-width="110px">
+            <el-form
+              v-else-if="order.status === 'inspecting'"
+              :model="inspectForm"
+              label-width="110px"
+            >
               <el-form-item label="复检结果">
                 <el-radio-group v-model="inspectForm.result">
                   <el-radio label="passed">通过</el-radio>
@@ -598,7 +739,12 @@
                 </el-radio-group>
               </el-form-item>
               <el-form-item label="复检人">
-                <el-select v-model="inspectForm.inspector" filterable placeholder="选择复检人" class="!w-100%">
+                <el-select
+                  v-model="inspectForm.inspector"
+                  filterable
+                  placeholder="选择复检人"
+                  class="!w-100%"
+                >
                   <el-option
                     v-for="item in inspectorOptions"
                     :key="`inspector-${item.userId}`"
@@ -616,10 +762,20 @@
                 />
               </el-form-item>
               <el-form-item label="电池核验">
-                <el-switch v-model="inspectForm.batteryCheck" inline-prompt active-text="已核验" inactive-text="未核验" />
+                <el-switch
+                  v-model="inspectForm.batteryCheck"
+                  inline-prompt
+                  active-text="已核验"
+                  inactive-text="未核验"
+                />
               </el-form-item>
               <el-form-item label="功能验证">
-                <el-switch v-model="inspectForm.flightTest" inline-prompt active-text="已验证" inactive-text="未验证" />
+                <el-switch
+                  v-model="inspectForm.flightTest"
+                  inline-prompt
+                  active-text="已验证"
+                  inactive-text="未验证"
+                />
               </el-form-item>
               <el-form-item label="复检意见">
                 <el-input
@@ -634,7 +790,12 @@
             <template v-else-if="order.status === 'releasing'">
               <el-form :model="releaseForm" label-width="110px" class="mt-16px">
                 <el-form-item label="审核人">
-                  <el-select v-model="releaseForm.reviewer" filterable placeholder="选择放行审核人" class="!w-100%">
+                  <el-select
+                    v-model="releaseForm.reviewer"
+                    filterable
+                    placeholder="选择放行审核人"
+                    class="!w-100%"
+                  >
                     <el-option
                       v-for="item in reviewerOptions"
                       :key="`reviewer-${item.userId}`"
@@ -712,21 +873,19 @@ import type { UploadFile, UploadFiles, UploadUserFile } from 'element-plus'
 import { ChatConversationApi } from '@/api/ai/chat/conversation'
 import { ChatMessageApi } from '@/api/ai/chat/message'
 import { ContentWrap } from '@/components/ContentWrap'
+import { YianAiApi } from '@/api/yian/ai'
 import { useUserStoreWithOut } from '@/store/modules/user'
 import { WmMiscIssueApi } from '@/api/mes/wm/miscissue'
 import { WmMiscIssueLineApi } from '@/api/mes/wm/miscissue/line'
-import {
-  getItemSimpleList,
-  getMaterialStockPage,
-  type MaterialStockVO
-} from '@/api/yian/inventory'
+import { getItemSimpleList, getMaterialStockPage, type MaterialStockVO } from '@/api/yian/inventory'
 import { listLinkedBatteries, type AssetBatteryVO } from '@/api/yian/asset'
 import {
   evaluateReleaseRule,
   evaluateReleaseRuleRemote,
   evaluateWorkorderStageRuleRemote,
   syncRuleRuntimeConfig,
-  type ReleaseRuleOutcome
+  type ReleaseRuleOutcome,
+  type WorkorderStageRuleOutcome
 } from '@/api/yian/config/rule'
 import { getPersonnelPage, type PersonnelVO } from '@/api/yian/config/personnel'
 import {
@@ -734,6 +893,7 @@ import {
   YianWorkorderApi,
   type WorkorderAttachmentItem,
   type WorkorderMaterialItem,
+  type WorkorderPriority,
   type WorkorderReleaseResult,
   type WorkorderRiskLevel,
   type WorkorderStage,
@@ -854,7 +1014,7 @@ const acceptForm = reactive({
   grounded: true,
   dispatcher: '',
   assignee: '',
-  priority: 'P2' as const,
+  priority: 'P2' as WorkorderPriority,
   deadline: '',
   deadlineReason: '',
   remark: ''
@@ -907,8 +1067,10 @@ const logImportDialogVisible = ref(false)
 const diagnosisAssistantVisible = ref(false)
 const imageUploadList = ref<UploadUserFile[]>([])
 const logUploadList = ref<UploadUserFile[]>([])
+const pendingLogUploadFiles = ref<UploadFile[]>([])
 const pendingImageAttachments = ref<WorkorderAttachmentItem[]>([])
 const pendingLogAttachments = ref<WorkorderAttachmentItem[]>([])
+const flightLogAssistantSummary = ref('')
 const diagnosisAssistantDraft = ref('')
 const diagnosisAssistantMessages = ref<DiagnosisAssistantMessage[]>([])
 const diagnosisAssistantDraftResult = ref<DiagnosisAssistantDraftResult | null>(null)
@@ -917,6 +1079,18 @@ const diagnosisAssistantStreaming = ref(false)
 const diagnosisAssistantBootstrapping = ref(false)
 const diagnosisAssistantContextDirty = ref(false)
 const diagnosisAssistantAbortController = ref<AbortController | null>(null)
+const diagnosisAssistantHasLogContext = computed(
+  () => !!flightLogAssistantSummary.value || !!pendingLogAttachments.value.length || !!logAttachments.value.length
+)
+const diagnosisAssistantLogContextLabel = computed(() => {
+  if (logAttachments.value.length) {
+    return `已关联飞行日志 ${logAttachments.value.length} 份`
+  }
+  if (flightLogAssistantSummary.value) {
+    return '已加载 AI 解析飞行日志摘要'
+  }
+  return '暂未关联飞行日志'
+})
 
 const resolvePersonnelDisplayName = (person: PersonnelVO) =>
   person.userName || person.jobTitle || person.bizRoleLabel || `用户#${person.userId}`
@@ -947,16 +1121,22 @@ const buildPersonnelOptions = (
 
   const enabledPersonnel = personnelOptions.value.filter((item) => item.userStatus === 0)
   const sameStationPersonnel = enabledPersonnel.filter((item) => item.stationName === stationName)
-  const globalPersonnel = enabledPersonnel.filter((item) => item.stationName === GLOBAL_PERSONNEL_STATION)
+  const globalPersonnel = enabledPersonnel.filter(
+    (item) => item.stationName === GLOBAL_PERSONNEL_STATION
+  )
   const otherPersonnel = enabledPersonnel.filter(
     (item) => item.stationName !== stationName && item.stationName !== GLOBAL_PERSONNEL_STATION
   )
 
-  primaryRoles.forEach((role) => append(sameStationPersonnel.filter((item) => item.bizRole === role)))
+  primaryRoles.forEach((role) =>
+    append(sameStationPersonnel.filter((item) => item.bizRole === role))
+  )
   if (options.includeGlobal !== false) {
     primaryRoles.forEach((role) => append(globalPersonnel.filter((item) => item.bizRole === role)))
   }
-  fallbackRoles.forEach((role) => append(sameStationPersonnel.filter((item) => item.bizRole === role)))
+  fallbackRoles.forEach((role) =>
+    append(sameStationPersonnel.filter((item) => item.bizRole === role))
+  )
   if (options.includeGlobal !== false) {
     fallbackRoles.forEach((role) => append(globalPersonnel.filter((item) => item.bizRole === role)))
   }
@@ -988,7 +1168,9 @@ const evidenceItems = computed(() => [
 ])
 const reporterDisplay = computed(() => {
   if (!order.value) return '-'
-  return order.value.reporterPhone ? `${order.value.creator} / ${order.value.reporterPhone}` : order.value.creator
+  return order.value.reporterPhone
+    ? `${order.value.creator} / ${order.value.reporterPhone}`
+    : order.value.creator
 })
 const logSummaryText = computed(() =>
   logAttachments.value.length
@@ -1018,15 +1200,21 @@ const getRequestedProcessingStage = (): ActiveProcessingStage | '' => {
 const releaseTagType = (status: WorkorderVO['releaseStatus']) => RELEASE_META[status].tagType
 const releaseLabel = (status: WorkorderVO['releaseStatus']) => RELEASE_META[status].label
 const riskTagType = (value: WorkorderVO['riskLevel']): HistoryStageCard['tagType'] =>
-  value === 'high' ? 'danger' : value === 'medium' ? 'warning' : value === 'low' ? 'success' : 'info'
+  value === 'high'
+    ? 'danger'
+    : value === 'medium'
+      ? 'warning'
+      : value === 'low'
+        ? 'success'
+        : 'info'
 const riskLevelLabel = (value: WorkorderRiskLevel | 'unrated') =>
   (
-    {
+    ({
       high: '高风险',
       medium: '中风险',
       low: '低风险',
       unrated: '未定级'
-    } as Record<WorkorderRiskLevel | 'unrated', string>
+    }) as Record<WorkorderRiskLevel | 'unrated', string>
   )[value]
 const acceptanceDecisionLabel = (value?: 'accepted' | 'return_for_info') =>
   value === 'return_for_info' ? '退回补充资料' : '受理并进入初诊'
@@ -1037,9 +1225,12 @@ const groundedTag = computed(() => {
   if (!order.value) return { label: '-', type: 'info' as const }
   if (order.value.status === 'completed') return { label: '已放行', type: 'success' as const }
   if (order.value.status === 'closed') return { label: '已关闭', type: 'info' as const }
-  if (order.value.release?.result === 'rejected') return { label: '驳回返修', type: 'danger' as const }
-  if (order.value.release?.result === 'limited') return { label: '限制放行', type: 'warning' as const }
-  if (order.value.acceptance?.grounded === false) return { label: '观察中', type: 'warning' as const }
+  if (order.value.release?.result === 'rejected')
+    return { label: '驳回返修', type: 'danger' as const }
+  if (order.value.release?.result === 'limited')
+    return { label: '限制放行', type: 'warning' as const }
+  if (order.value.acceptance?.grounded === false)
+    return { label: '观察中', type: 'warning' as const }
   return { label: '已停飞', type: 'danger' as const }
 })
 
@@ -1084,7 +1275,9 @@ const processingDrawerMeta = computed<DrawerMeta>(() => {
       notice: '放行审核只保留必要字段。'
     }
   }
-  return activeProcessingStage.value ? metaMap[activeProcessingStage.value] : { title: '处理表单', description: '', submitText: '提交' }
+  return activeProcessingStage.value
+    ? metaMap[activeProcessingStage.value]
+    : { title: '处理表单', description: '', submitText: '提交' }
 })
 
 const formatMaterialItems = (items?: WorkorderMaterialItem[]) =>
@@ -1156,9 +1349,16 @@ const historyStageCards = computed<HistoryStageCard[]>(() => {
         { label: '故障分类', value: order.value.diagnosis.faultCategory || '-' },
         { label: '疑似原因', value: order.value.diagnosis.probableCause || '-', full: true },
         { label: '风险等级', value: riskLevelLabel(order.value.diagnosis.riskLevel) },
-        { label: '停飞建议', value: order.value.diagnosis.groundedSuggestion ? '建议停飞' : '可继续观察' },
+        {
+          label: '停飞建议',
+          value: order.value.diagnosis.groundedSuggestion ? '建议停飞' : '可继续观察'
+        },
         { label: '是否需要备件', value: order.value.diagnosis.needParts ? '是' : '否' },
-        { label: '建议领料清单', value: order.value.diagnosis.suggestedParts.join('、') || '无', full: true },
+        {
+          label: '建议领料清单',
+          value: order.value.diagnosis.suggestedParts.join('、') || '无',
+          full: true
+        },
         { label: '处理建议', value: order.value.diagnosis.conclusion || '-', full: true }
       ]
     })
@@ -1170,8 +1370,12 @@ const historyStageCards = computed<HistoryStageCard[]>(() => {
       title: '领料确认',
       at: order.value.picking.pickedAt,
       operator: order.value.picking.picker,
-      tagLabel: order.value.picking.items.some((item) => item.status === 'pending') ? '部分待补齐' : '已领料',
-      tagType: order.value.picking.items.some((item) => item.status === 'pending') ? 'warning' : 'success',
+      tagLabel: order.value.picking.items.some((item) => item.status === 'pending')
+        ? '部分待补齐'
+        : '已领料',
+      tagType: order.value.picking.items.some((item) => item.status === 'pending')
+        ? 'warning'
+        : 'success',
       summary: `已从 ${order.value.picking.warehouse} 提交 ${order.value.picking.items.length} 项备件领料。`,
       fields: [
         { label: '领料人', value: order.value.picking.picker || '-' },
@@ -1280,7 +1484,10 @@ const currentAction = computed(() => {
   if (!order.value) {
     return { title: '-', description: '-', primaryText: '' }
   }
-  const actionMap: Record<WorkorderVO['status'], { title: string; description: string; primaryText?: string }> = {
+  const actionMap: Record<
+    WorkorderVO['status'],
+    { title: string; description: string; primaryText?: string }
+  > = {
     pending: {
       title: '当前应完成工单受理',
       description: '请确认是否停飞、责任分派和节点截止时间，提交后进入初始诊断。',
@@ -1352,9 +1559,7 @@ const normalizeSuggestedParts = (text: string): PickingDraftItem[] =>
 
 const hydratePickItemsInventory = async () => {
   await Promise.all(
-    pickForm.items
-      .filter((item) => item.name.trim())
-      .map((item) => refreshItemInventory(item))
+    pickForm.items.filter((item) => item.name.trim()).map((item) => refreshItemInventory(item))
   )
 }
 
@@ -1429,7 +1634,9 @@ const stripDiagnosisDraftTag = (content: string) =>
     .replace(/<diagnosis_draft>[\s\S]*$/gi, '')
     .trim()
 
-const normalizeDiagnosisAssistantDraft = (payload: Record<string, any>): DiagnosisAssistantDraftResult => {
+const normalizeDiagnosisAssistantDraft = (
+  payload: Record<string, any>
+): DiagnosisAssistantDraftResult => {
   const suggestedParts = Array.isArray(payload.suggestedParts)
     ? payload.suggestedParts.map((item) => String(item || '').trim()).filter(Boolean)
     : String(payload.suggestedPartsText || payload.suggestedParts || '')
@@ -1448,7 +1655,8 @@ const normalizeDiagnosisAssistantDraft = (payload: Record<string, any>): Diagnos
     needParts: payload.needParts === true || String(payload.needParts).toLowerCase() === 'true',
     suggestedParts,
     suggestedPartsText:
-      String(payload.suggestedPartsText || '').trim() || diagnosisAssistantSuggestedPartsText(suggestedParts),
+      String(payload.suggestedPartsText || '').trim() ||
+      diagnosisAssistantSuggestedPartsText(suggestedParts),
     conclusion: String(payload.conclusion || '').trim()
   }
 }
@@ -1480,7 +1688,8 @@ const syncDiagnosisAssistantDraftFromMessages = () => {
   diagnosisAssistantDraftResult.value = null
 }
 
-const buildDiagnosisAssistantSystemMessage = () => `你是“翼安智链”维修工单里的 AI 初诊助手，服务对象是机务和维修工程师。
+const buildDiagnosisAssistantSystemMessage =
+  () => `你是“翼安智链”维修工单里的 AI 初诊助手，服务对象是机务和维修工程师。
 你的目标是基于工单、飞行日志状态、现场附件状态和聊天上下文，持续追问并收敛出可写入初诊表单的结构化结论。
 
 你必须遵守以下规则：
@@ -1588,7 +1797,9 @@ const syncDiagnosisAssistantMessagesFromConversation = async () => {
     diagnosisAssistantDraftResult.value = null
     return
   }
-  const list = await ChatMessageApi.getChatMessageListByConversationId(diagnosisAssistantConversationId.value)
+  const list = await ChatMessageApi.getChatMessageListByConversationId(
+    diagnosisAssistantConversationId.value
+  )
   diagnosisAssistantMessages.value = (Array.isArray(list) ? list : [])
     .map((item) => mapDiagnosisAssistantChatMessage(item))
     .filter(Boolean) as DiagnosisAssistantMessage[]
@@ -1606,7 +1817,7 @@ const resolveDiagnosisAssistantErrorMessage = (error: any, fallback: string) => 
   return rawMessage
 }
 
-const ensureDiagnosisAssistantConversation = async () => {
+const ensureDiagnosisAssistantConversation = async (): Promise<number> => {
   if (!order.value) {
     throw new Error('当前工单不存在，无法启动初诊助手')
   }
@@ -1615,6 +1826,9 @@ const ensureDiagnosisAssistantConversation = async () => {
   }
   if (!diagnosisAssistantConversationId.value) {
     diagnosisAssistantConversationId.value = await ChatConversationApi.createChatConversationMy({})
+  }
+  if (!diagnosisAssistantConversationId.value) {
+    throw new Error('未能创建初诊助手会话')
   }
   await ChatConversationApi.updateChatConversationMy({
     id: diagnosisAssistantConversationId.value,
@@ -1734,6 +1948,38 @@ const openDiagnosisAssistant = async () => {
   diagnosisAssistantVisible.value = true
   try {
     await bootstrapDiagnosisAssistant()
+    if (!diagnosisAssistantDraftResult.value || diagnosisAssistantContextDirty.value) {
+      try {
+        const draft = await YianAiApi.generateDiagnosisDraft({
+          workorderId: order.value?.id,
+          orderNo: order.value?.orderNo || '',
+          deviceCode: order.value?.deviceCode || '',
+          deviceName: order.value?.deviceName,
+          siteName: order.value?.siteName,
+          taskScene: taskSceneText.value,
+          symptom: order.value?.symptom || '',
+          description: order.value?.description || '',
+          flightLogSummary: flightLogAssistantSummary.value,
+          imageSummary: imageSummaryText.value,
+          attachmentNames: [
+            ...logAttachments.value.map((item) => item.name),
+            ...imageAttachments.value.map((item) => item.name)
+          ]
+        })
+        diagnosisAssistantDraftResult.value = {
+          faultCategory: draft.faultCategory,
+          probableCause: draft.probableCause,
+          riskLevel: draft.riskLevel,
+          groundedSuggestion: draft.groundedSuggestion,
+          needParts: draft.needParts,
+          suggestedParts: draft.suggestedParts || [],
+          suggestedPartsText: draft.suggestedPartsText || (draft.suggestedParts || []).join('、'),
+          conclusion: draft.conclusion
+        }
+      } catch {
+        // Keep the chat assistant available even if the structured draft endpoint is unavailable.
+      }
+    }
   } catch (error: any) {
     const tip = resolveDiagnosisAssistantErrorMessage(error, '初诊助手暂时不可用，请稍后重试')
     diagnosisAssistantMessages.value = [
@@ -1799,14 +2045,18 @@ const refreshItemInventory = async (item: PickingDraftItem) => {
     const matchedRows = rows.filter((row: MaterialStockVO) =>
       item.itemId ? row.itemId === item.itemId : row.itemName === item.name
     )
-    const fallbackRow = matchedRows[0] || rows.find((row: MaterialStockVO) => row.itemName === item.name)
+    const fallbackRow =
+      matchedRows[0] || rows.find((row: MaterialStockVO) => row.itemName === item.name)
     if (!item.itemId && fallbackRow) {
       item.itemId = fallbackRow.itemId
     }
     if ((!item.spec || item.spec === order.value?.deviceName) && fallbackRow?.specification) {
       item.spec = fallbackRow.specification
     }
-    const totalQuantity = matchedRows.reduce((sum: number, row: MaterialStockVO) => sum + Number(row.quantity || 0), 0)
+    const totalQuantity = matchedRows.reduce(
+      (sum: number, row: MaterialStockVO) => sum + Number(row.quantity || 0),
+      0
+    )
     item.currentInventory = totalQuantity
     item.pickedQuantity = Math.min(item.pickedQuantity, totalQuantity)
   } catch {
@@ -1835,9 +2085,7 @@ const syncPickItemsInventory = () => {
     message.warning('当前没有可写回的库存参考数据')
     return
   }
-  const stockMap = new Map(
-    inventoryReferenceRows.value.map((row) => [row.itemId, row])
-  )
+  const stockMap = new Map(inventoryReferenceRows.value.map((row) => [row.itemId, row]))
   pickForm.items = pickForm.items.map((item) => {
     const matched = item.itemId ? stockMap.get(item.itemId) : undefined
     if (!matched) return item
@@ -1854,11 +2102,7 @@ const syncPickItemsInventory = () => {
 
 const loadInventoryReference = async () => {
   const keywords = Array.from(
-    new Set(
-      pickForm.items
-        .map((item) => item.name.trim())
-        .filter(Boolean)
-    )
+    new Set(pickForm.items.map((item) => item.name.trim()).filter(Boolean))
   )
   if (!keywords.length) {
     inventoryReferenceRows.value = []
@@ -2019,7 +2263,8 @@ const resetStageForms = () => {
   diagnoseForm.engineer = ''
   diagnoseForm.faultCategory = ''
   diagnoseForm.probableCause = ''
-  diagnoseForm.riskLevel = order.value?.riskLevel === 'unrated' ? 'medium' : (order.value?.riskLevel || 'medium')
+  diagnoseForm.riskLevel =
+    order.value?.riskLevel === 'unrated' ? 'medium' : order.value?.riskLevel || 'medium'
   diagnoseForm.groundedSuggestion = true
   diagnoseForm.needParts = true
   diagnoseForm.suggestedPartsText = ''
@@ -2043,7 +2288,8 @@ const resetStageForms = () => {
 
   releaseForm.reviewer = ''
   releaseForm.result = 'approved'
-  releaseForm.riskLevel = order.value?.riskLevel === 'unrated' ? 'medium' : (order.value?.riskLevel || 'medium')
+  releaseForm.riskLevel =
+    order.value?.riskLevel === 'unrated' ? 'medium' : order.value?.riskLevel || 'medium'
   releaseForm.restrictions = ''
   releaseForm.conclusion = ''
   applyPersonnelDefaults()
@@ -2118,9 +2364,11 @@ const syncFormsFromOrder = () => {
   }
 
   const release = order.value.release
-  releaseForm.reviewer = release?.reviewer || reviewerOptions.value[0]?.value || currentOperatorName.value
+  releaseForm.reviewer =
+    release?.reviewer || reviewerOptions.value[0]?.value || currentOperatorName.value
   releaseForm.result = release?.result || 'approved'
-  releaseForm.riskLevel = release?.riskLevel || (order.value.riskLevel === 'unrated' ? 'medium' : order.value.riskLevel)
+  releaseForm.riskLevel =
+    release?.riskLevel || (order.value.riskLevel === 'unrated' ? 'medium' : order.value.riskLevel)
   releaseForm.restrictions = release?.restrictions || ''
   releaseForm.conclusion = release?.conclusion || ''
 }
@@ -2135,6 +2383,7 @@ const loadOrder = async () => {
     order.value = YianWorkorderApi.getDetail(Number(route.params.id))
     resetStageForms()
     syncFormsFromOrder()
+    await hydratePersistedAiArtifacts()
     await refreshReleaseRuleDecision()
     expandedHistoryStages.value = historyStageCards.value.length
       ? [historyStageCards.value[historyStageCards.value.length - 1].key]
@@ -2144,6 +2393,47 @@ const loadOrder = async () => {
     inventoryReferenceRows.value = []
     expandedHistoryStages.value = []
     releaseRuleDecision.value = { ...DEFAULT_RELEASE_RULE_DECISION }
+  }
+}
+
+const hydratePersistedAiArtifacts = async () => {
+  if (!order.value) {
+    flightLogAssistantSummary.value = ''
+    diagnosisAssistantDraftResult.value = null
+    return
+  }
+  try {
+    const latestLogParse = await YianAiApi.getLatestWorkorderFlightLogParse({
+      workorderId: order.value.id,
+      orderNo: order.value.orderNo
+    })
+    if (latestLogParse) {
+      flightLogAssistantSummary.value =
+        latestLogParse.assistantContextSummary || latestLogParse.summary || ''
+    }
+  } catch {
+    // Keep current local state when persisted AI log summary is unavailable.
+  }
+  try {
+    const latestDraft = await YianAiApi.getLatestDiagnosisDraft({
+      workorderId: order.value.id,
+      orderNo: order.value.orderNo
+    })
+    diagnosisAssistantDraftResult.value = latestDraft
+      ? {
+          faultCategory: latestDraft.faultCategory,
+          probableCause: latestDraft.probableCause,
+          riskLevel: latestDraft.riskLevel,
+          groundedSuggestion: latestDraft.groundedSuggestion,
+          needParts: latestDraft.needParts,
+          suggestedParts: latestDraft.suggestedParts || [],
+          suggestedPartsText:
+            latestDraft.suggestedPartsText || (latestDraft.suggestedParts || []).join(' / '),
+          conclusion: latestDraft.conclusion
+        }
+      : null
+  } catch {
+    // Keep current local state when persisted AI diagnosis is unavailable.
   }
 }
 
@@ -2189,7 +2479,10 @@ const toUploadUserFiles = (files: UploadFiles) =>
     url: item.url
   }))
 
-const toAttachmentMeta = (files: UploadFiles, type: WorkorderAttachmentItem['type']): WorkorderAttachmentItem[] =>
+const toAttachmentMeta = (
+  files: UploadFiles,
+  type: WorkorderAttachmentItem['type']
+): WorkorderAttachmentItem[] =>
   files.map((item) => ({
     name: item.name,
     type,
@@ -2209,11 +2502,13 @@ const handleImageUploadRemove = (_file: UploadFile, files: UploadFiles) => {
 
 const handleLogUploadChange = (_file: UploadFile, files: UploadFiles) => {
   logUploadList.value = toUploadUserFiles(files)
+  pendingLogUploadFiles.value = [...files]
   pendingLogAttachments.value = toAttachmentMeta(files, 'log')
 }
 
 const handleLogUploadRemove = (_file: UploadFile, files: UploadFiles) => {
   logUploadList.value = toUploadUserFiles(files)
+  pendingLogUploadFiles.value = [...files]
   pendingLogAttachments.value = toAttachmentMeta(files, 'log')
 }
 
@@ -2240,6 +2535,29 @@ const submitLogImport = async () => {
     message.warning('请先选择要导入的日志文件')
     return
   }
+  const rawFiles = pendingLogUploadFiles.value.map((item) => item.raw).filter(Boolean) as File[]
+  if (rawFiles.length) {
+    try {
+      const parsed = await YianAiApi.parseWorkorderFlightLogs({
+        workorderId: order.value.id,
+        orderNo: order.value.orderNo,
+        deviceCode: order.value.deviceCode,
+        uploadedBy: currentOperatorName.value,
+        files: rawFiles
+      })
+      if (parsed.attachments?.length) {
+        pendingLogAttachments.value = parsed.attachments.map((item) => ({
+          name: item.name,
+          type: 'log',
+          size: item.size,
+          mimeType: item.mimeType
+        }))
+      }
+      flightLogAssistantSummary.value = parsed.assistantContextSummary || parsed.summary || ''
+    } catch {
+      // Keep local metadata as fallback.
+    }
+  }
   YianWorkorderApi.appendAttachments(order.value.id, {
     type: 'log',
     files: pendingLogAttachments.value,
@@ -2248,6 +2566,7 @@ const submitLogImport = async () => {
   message.success(`已补录 ${pendingLogAttachments.value.length} 份日志附件`)
   logImportDialogVisible.value = false
   logUploadList.value = []
+  pendingLogUploadFiles.value = []
   pendingLogAttachments.value = []
   diagnosisAssistantContextDirty.value = true
   await loadOrder()
@@ -2287,9 +2606,11 @@ const writeDiagnosisAssistantToDiagnosis = async () => {
   diagnosisAssistantVisible.value = false
 }
 
-const validateWorkorderStageRule = async (payload: Parameters<typeof evaluateWorkorderStageRuleRemote>[0]) => {
+const validateWorkorderStageRule = async (
+  payload: Parameters<typeof evaluateWorkorderStageRuleRemote>[0]
+): Promise<boolean> => {
   try {
-    const outcome = await evaluateWorkorderStageRuleRemote(payload)
+    const outcome = (await evaluateWorkorderStageRuleRemote(payload)) as WorkorderStageRuleOutcome
     if (!outcome.allowed) {
       message.warning(outcome.blockingReasons[0] || outcome.summary)
       return false
@@ -2332,7 +2653,12 @@ const submitAcceptance = async () => {
 }
 
 const submitDiagnosis = async () => {
-  if (!order.value || !diagnoseForm.engineer || !diagnoseForm.faultCategory || !diagnoseForm.probableCause) {
+  if (
+    !order.value ||
+    !diagnoseForm.engineer ||
+    !diagnoseForm.faultCategory ||
+    !diagnoseForm.probableCause
+  ) {
     message.warning('请完整填写故障分类和疑似原因')
     return
   }
@@ -2388,7 +2714,11 @@ const submitPicking = async () => {
     message.warning('请先为每一项领料匹配真实备件，再提交领料')
     return
   }
-  if (items.some((item) => item.currentInventory !== undefined && item.currentInventory < item.pickedQuantity!)) {
+  if (
+    items.some(
+      (item) => item.currentInventory !== undefined && item.currentInventory < item.pickedQuantity!
+    )
+  ) {
     message.warning('当前存在库存不足的备件，无法完成领料')
     return
   }
@@ -2401,9 +2731,11 @@ const submitPicking = async () => {
     stage: 'picking',
     pickerProvided: Boolean(pickForm.picker.trim()),
     itemCount: items.length,
-    inventorySufficient: !items.some(
-      (item) => item.currentInventory !== undefined && item.currentInventory < item.pickedQuantity!
-    ) && !allocations.some((item) => item.remaining > 0)
+    inventorySufficient:
+      !items.some(
+        (item) =>
+          item.currentInventory !== undefined && item.currentInventory < item.pickedQuantity!
+      ) && !allocations.some((item) => item.remaining > 0)
   })
   if (!pickingAllowed) {
     return
@@ -2475,7 +2807,11 @@ const submitRelease = async (forcedResult?: WorkorderReleaseResult) => {
     message.warning('请完整填写放行审核信息')
     return
   }
-  const result = forcedResult || releaseForm.result
+  const result = (
+    (forcedResult || releaseForm.result) === 'pending'
+      ? 'approved'
+      : forcedResult || releaseForm.result
+  ) as Exclude<WorkorderReleaseResult, 'pending'>
   if (result === 'limited' && !releaseForm.restrictions.trim()) {
     message.warning('限制放行时请填写限制条件')
     return
@@ -2489,11 +2825,15 @@ const submitRelease = async (forcedResult?: WorkorderReleaseResult) => {
     return
   }
   if (result === 'approved' && releaseRuleDecision.value.recommendedResult !== 'approved') {
-    message.warning(releaseRuleDecision.value.blockingReasons[0] || releaseRuleDecision.value.summary)
+    message.warning(
+      releaseRuleDecision.value.blockingReasons[0] || releaseRuleDecision.value.summary
+    )
     return
   }
   if (result === 'limited' && releaseRuleDecision.value.recommendedResult === 'rejected') {
-    message.warning(releaseRuleDecision.value.blockingReasons[0] || releaseRuleDecision.value.summary)
+    message.warning(
+      releaseRuleDecision.value.blockingReasons[0] || releaseRuleDecision.value.summary
+    )
     return
   }
   YianWorkorderApi.submitRelease(order.value.id, {

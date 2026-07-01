@@ -36,7 +36,11 @@
               <el-table-column label="上传人" prop="uploadedBy" width="120" />
               <el-table-column label="上传时间" prop="uploadedAt" width="180" />
             </el-table>
-            <el-empty v-if="!record.documents.length" description="当前没有建档附件" class="mt-20px" />
+            <el-empty
+              v-if="!record.documents.length"
+              description="当前没有建档附件"
+              class="mt-20px"
+            />
           </el-card>
         </el-col>
         <el-col :xs="24" :lg="8">
@@ -45,7 +49,9 @@
               <div class="card-header">附件解析摘要</div>
             </template>
             <el-descriptions :column="1" border>
-              <el-descriptions-item label="解析摘要">{{ record.parseSummary }}</el-descriptions-item>
+              <el-descriptions-item label="解析摘要">{{
+                record.parseSummary
+              }}</el-descriptions-item>
               <el-descriptions-item label="解析来源">{{ record.parseSource }}</el-descriptions-item>
               <el-descriptions-item label="最近解析时间">
                 {{ record.parseUpdatedAt }}
@@ -111,7 +117,9 @@
 import type { UploadFile, UploadFiles, UploadUserFile } from 'element-plus'
 import { ContentWrap } from '@/components/ContentWrap'
 import { DvMachineryApi, type DvMachineryVO } from '@/api/mes/dv/machinery'
+import type { LocalDemoMachineryVO } from '@/api/mes/localDemo'
 import {
+  hydrateAssetDeviceDocumentParseFromRemote,
   reparseAssetDeviceDocuments,
   refreshAssetDeviceRuleRecord,
   resolveAssetDeviceMasterRecord,
@@ -128,10 +136,11 @@ const message = useMessage()
 const userStore = useUserStoreWithOut()
 
 const loading = ref(false)
-const device = ref<DvMachineryVO | null>(null)
+const device = ref<DvMachineryVO | LocalDemoMachineryVO | null>(null)
 const record = ref<AssetDeviceMasterRecordVO>(resolveAssetDeviceMasterRecord(null))
 const uploadDialogVisible = ref(false)
 const uploadList = ref<UploadUserFile[]>([])
+const pendingUploadFiles = ref<UploadFile[]>([])
 const currentOperatorName = computed(() => userStore.getUser.nickname || '当前账号')
 
 const getDeviceId = () => Number(route.params.id)
@@ -147,6 +156,7 @@ const getDetail = async () => {
     const machinery = await DvMachineryApi.getMachinery(id)
     device.value = machinery
     record.value = resolveAssetDeviceMasterRecord(machinery)
+    record.value = await hydrateAssetDeviceDocumentParseFromRemote(machinery)
     record.value = await refreshAssetDeviceRuleRecord(machinery)
   } finally {
     loading.value = false
@@ -161,13 +171,17 @@ const handleUpload = () => {
   uploadDialogVisible.value = true
 }
 
-const handleReparse = () => {
+const handleReparse = async () => {
   if (!device.value?.code) return
   if (!record.value.documents.length) {
     message.warning('当前没有建档附件，无法触发重新解析')
     return
   }
-  record.value = reparseAssetDeviceDocuments(device.value, device.value.code, currentOperatorName.value)
+  record.value = await reparseAssetDeviceDocuments(
+    device.value,
+    device.value.code,
+    currentOperatorName.value
+  )
   message.success('已按当前建档附件重新解析，页面摘要已刷新')
 }
 
@@ -180,10 +194,12 @@ const mapUploadFiles = (files: UploadFiles) =>
 
 const handleUploadChange = (_file: UploadFile, files: UploadFiles) => {
   uploadList.value = mapUploadFiles(files)
+  pendingUploadFiles.value = [...files]
 }
 
 const handleUploadRemove = (_file: UploadFile, files: UploadFiles) => {
   uploadList.value = mapUploadFiles(files)
+  pendingUploadFiles.value = [...files]
 }
 
 const submitUploads = async () => {
@@ -191,16 +207,21 @@ const submitUploads = async () => {
     message.warning('请先选择要上传的建档附件')
     return
   }
-  for (const file of uploadList.value) {
-    record.value = uploadAssetDeviceDocument(device.value, {
-      code: device.value.code,
-      fileName: file.name,
-      uploadedBy: currentOperatorName.value
-    })
+  const rawFiles = pendingUploadFiles.value.map((item) => item.raw).filter(Boolean) as File[]
+  if (!rawFiles.length) {
+    message.warning('当前附件缺少可上传的原始文件，请重新选择后再试')
+    return
   }
-  const uploadedCount = uploadList.value.length
+  record.value = await uploadAssetDeviceDocument(device.value, {
+    code: device.value.code,
+    fileName: rawFiles[0]?.name || uploadList.value[0].name,
+    files: rawFiles,
+    uploadedBy: currentOperatorName.value
+  })
+  const uploadedCount = rawFiles.length
   uploadDialogVisible.value = false
   uploadList.value = []
+  pendingUploadFiles.value = []
   message.success(`已补录 ${uploadedCount} 份建档附件`)
 }
 

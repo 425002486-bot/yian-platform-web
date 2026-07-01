@@ -265,6 +265,60 @@ const BOARD_STAGES: WorkorderStage[] = [
 const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value))
 const now = () => dayjs().format('YYYY-MM-DD HH:mm')
 
+const localizeDiagnosisCategory = (value?: string) => {
+  switch ((value || '').trim()) {
+    case 'Gimbal Stability Issue':
+      return '云台稳定性异常'
+    default:
+      return value || ''
+  }
+}
+
+const localizeDiagnosisSentence = (value?: string) => {
+  const normalized = (value || '').trim()
+  switch (normalized) {
+    case 'Gimbal motor calibration drift or IMU misalignment; possible firmware inconsistency between gimbal controller and flight controller.':
+      return '疑似云台电机校准漂移或 IMU 未对齐，也不排除云台控制器与飞控之间存在固件版本不一致。'
+    case 'Gimbal instability detected during stability check mission; no hardware failure evident from logs or images, but requires recalibration and firmware validation before flight.':
+      return '在稳定性检查任务中检测到云台异常抖动；日志和图像暂未发现明确的硬件损坏，但起飞前仍需完成重新校准和固件一致性核验。'
+    case 'Flight log confirms gimbal stability check executed for 642 seconds using batteries BAT-UI-201 and BAT-UI-202. No visual anomalies in image summary and no attachments show mechanical damage. Likely software/firmware or calibration-related — not a critical hardware fault, but unsafe to fly until verified.':
+      return '飞行日志显示本次任务使用 BAT-UI-201 和 BAT-UI-202，完成了 642 秒的云台稳定性检查。图像摘要未见明显异常，附件也未显示机械损伤，更可能是软件、固件或校准类问题，虽然暂时不像是严重硬件故障，但在完成核验前仍不建议起飞。'
+    default:
+      return value || ''
+  }
+}
+
+const localizeDiagnosisParts = (parts?: string[]) =>
+  (parts || []).map((part) => {
+    switch ((part || '').trim()) {
+      case 'Flight-control diagnostic toolkit':
+        return '飞控诊断工具'
+      case 'Attitude sensor assembly':
+        return '姿态传感器组件'
+      default:
+        return part
+    }
+  })
+
+const normalizeDiagnosisRecord = (diagnosis?: WorkorderStageRecordDiagnosis) => {
+  if (!diagnosis) {
+    return diagnosis
+  }
+  const suggestedParts = localizeDiagnosisParts(diagnosis.suggestedParts)
+  return {
+    ...diagnosis,
+    faultCategory: localizeDiagnosisCategory(diagnosis.faultCategory),
+    probableCause: localizeDiagnosisSentence(diagnosis.probableCause),
+    conclusion: localizeDiagnosisSentence(diagnosis.conclusion),
+    suggestedParts
+  }
+}
+
+const normalizeWorkorderEntity = (order: WorkorderEntity): WorkorderEntity => ({
+  ...order,
+  diagnosis: normalizeDiagnosisRecord(order.diagnosis)
+})
+
 const createTimeline = (
   stage: WorkorderStage,
   title: string,
@@ -460,9 +514,11 @@ const seedOrders = (): WorkorderEntity[] => [
 const ensureOrders = (): WorkorderEntity[] => {
   const cached = wsCache.get(STORAGE_KEY) as WorkorderEntity[] | undefined
   if (cached?.length) {
-    return cached
+    const normalized = cached.map(normalizeWorkorderEntity)
+    wsCache.set(STORAGE_KEY, normalized)
+    return normalized
   }
-  const seeds = seedOrders()
+  const seeds = seedOrders().map(normalizeWorkorderEntity)
   wsCache.set(STORAGE_KEY, seeds)
   return seeds
 }
@@ -486,7 +542,7 @@ const toVO = (order: WorkorderEntity): WorkorderVO => {
     ? getSlaRuleForStage(order.status as RuleRuntimeStage).timeoutAction
     : ''
   return {
-    ...clone(order),
+    ...clone(normalizeWorkorderEntity(order)),
     sourceLabel: SOURCE_LABEL_MAP[order.source],
     statusLabel: stageMeta.label,
     tagType: stageMeta.tagType,
@@ -739,7 +795,7 @@ export const YianWorkorderApi = {
       draft.owner = payload.engineer
       draft.status = payload.needParts ? 'picking' : 'repairing'
       draft.slaDeadline = resolveStageSlaDeadline(draft.status)
-      draft.diagnosis = { ...payload, diagnosedAt: now() }
+      draft.diagnosis = normalizeDiagnosisRecord({ ...payload, diagnosedAt: now() })
       draft.timeline.push(
         createTimeline(
           payload.needParts ? 'picking' : 'repairing',

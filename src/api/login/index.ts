@@ -1,4 +1,5 @@
-﻿import request from '@/config/axios'
+import axios from 'axios'
+import request from '@/config/axios'
 import type { RegisterVO, UserLoginVO } from './types'
 
 export interface SmsCodeVO {
@@ -14,6 +15,26 @@ export interface SmsLoginVO {
 const useLocalDemoAuthFallback = () => {
   const baseUrl = String(import.meta.env.VITE_BASE_URL || '')
   return import.meta.env.DEV && baseUrl.includes('localhost:48080')
+}
+
+const shouldUseLocalDemoAuthFallback = (error: unknown) => {
+  if (!useLocalDemoAuthFallback()) {
+    return false
+  }
+  if (!axios.isAxiosError(error)) {
+    return false
+  }
+  // Only fall back when the local backend is unavailable.
+  // Do not hide real auth / tenant errors behind mock tokens.
+  if (error.response) {
+    return false
+  }
+  return (
+    error.message === 'Network Error' ||
+    error.code === 'ECONNABORTED' ||
+    error.code === 'ERR_NETWORK' ||
+    error.code === 'ERR_CONNECTION_REFUSED'
+  )
 }
 
 const buildMockMenus = () => [
@@ -316,7 +337,7 @@ export const login = async (data: UserLoginVO) => {
       }
     })
   } catch (error) {
-    if (useLocalDemoAuthFallback()) {
+    if (shouldUseLocalDemoAuthFallback(error)) {
       console.warn('[login] use local demo auth fallback')
       return buildMockToken()
     }
@@ -334,7 +355,7 @@ export const getTenantIdByName = async (name: string) => {
   try {
     return await request.get({ url: '/system/tenant/get-id-by-name?name=' + name })
   } catch (error) {
-    if (useLocalDemoAuthFallback()) {
+    if (shouldUseLocalDemoAuthFallback(error)) {
       return 1
     }
     throw error
@@ -346,7 +367,7 @@ export const getTenantByWebsite = async (website: string) => {
   try {
     return await request.get({ url: '/system/tenant/get-by-website?website=' + website })
   } catch (error) {
-    if (useLocalDemoAuthFallback()) {
+    if (shouldUseLocalDemoAuthFallback(error)) {
       return {
         id: 1,
         name: import.meta.env.VITE_APP_DEFAULT_LOGIN_TENANT || '翼安智链'
@@ -361,7 +382,7 @@ export const loginOut = async () => {
   try {
     return await request.post({ url: '/system/auth/logout' })
   } catch (error) {
-    if (useLocalDemoAuthFallback()) {
+    if (shouldUseLocalDemoAuthFallback(error)) {
       return true
     }
     throw error
@@ -373,7 +394,7 @@ export const getInfo = async () => {
   try {
     return await request.get({ url: '/system/auth/get-permission-info' })
   } catch (error) {
-    if (useLocalDemoAuthFallback()) {
+    if (shouldUseLocalDemoAuthFallback(error)) {
       console.warn('[login] use local demo permission fallback')
       return buildMockPermissionInfo()
     }
@@ -424,6 +445,3 @@ export const reqCheck = (data: any) => {
 export const smsResetPassword = (data: any) => {
   return request.post({ url: '/system/auth/reset-password', data })
 }
-
-
-

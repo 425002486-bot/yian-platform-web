@@ -5,6 +5,7 @@ import type {
   AssetHistoryEventVO,
   AssetInspectionAttachmentVO
 } from '@/api/yian/asset'
+import { YianAiApi, type YianAssetDeviceDocumentParseRespVO } from '@/api/yian/ai'
 import { evaluateDeviceAdmissionRuleRemote } from '@/api/yian/config/rule'
 import {
   listAssetBattery,
@@ -107,6 +108,7 @@ export interface AssetDeviceInspectionPayload {
 export interface AssetDeviceDocumentUploadPayload {
   code: string
   fileName: string
+  files?: File[]
   uploadedBy: string
   uploadedAt?: string
 }
@@ -126,7 +128,10 @@ const CURRENT_STATUS_META: Record<
   grounded: { label: '停飞', tagType: 'danger' }
 }
 
-const ENABLE_STATUS_META: Record<AssetDeviceEnableStatus, { label: string; machineryStatus: number }> = {
+const ENABLE_STATUS_META: Record<
+  AssetDeviceEnableStatus,
+  { label: string; machineryStatus: number }
+> = {
   enabled: { label: '启用', machineryStatus: MesDvMachineryStatusEnum.PRODUCING },
   disabled: { label: '停用', machineryStatus: MesDvMachineryStatusEnum.STOP }
 }
@@ -146,7 +151,10 @@ const getInspectionConclusionLabel = (conclusion: AssetDeviceInspectionRecordVO[
 
 export const ASSET_DEVICE_STATUS_OPTIONS = (
   Object.entries(CURRENT_STATUS_META) as Array<
-    [AssetDeviceCurrentStatus, { label: string; tagType: AssetDeviceMasterRecordVO['currentStatusTagType'] }]
+    [
+      AssetDeviceCurrentStatus,
+      { label: string; tagType: AssetDeviceMasterRecordVO['currentStatusTagType'] }
+    ]
   >
 ).map(([value, meta]) => ({
   value,
@@ -249,10 +257,7 @@ const setStore = (value: Record<string, Partial<AssetDeviceMasterRecordVO>>) => 
   wsCache.set(STORAGE_KEY, value)
 }
 
-const syncRemoteRuleResultToStore = (
-  code: string,
-  payload: Partial<AssetDeviceMasterRecordVO>
-) => {
+const syncRemoteRuleResultToStore = (code: string, payload: Partial<AssetDeviceMasterRecordVO>) => {
   if (!code) return
   const store = getStore()
   const current = store[code] || {}
@@ -267,7 +272,10 @@ const syncRemoteRuleResultToStore = (
   setStore(store)
 }
 
-const normalizeIdentityValue = (value?: string) => String(value || '').trim().toUpperCase()
+const normalizeIdentityValue = (value?: string) =>
+  String(value || '')
+    .trim()
+    .toUpperCase()
 
 const isAircraftMachineryType = (value?: string) => value === AIRCRAFT_MACHINERY_TYPE_NAME
 
@@ -308,7 +316,9 @@ const buildBatteryAlert = (
     }
   }
 
-  const batteries = listAssetBattery().filter((item) => standardBatteryCodes.includes(item.batteryCode))
+  const batteries = listAssetBattery().filter((item) =>
+    standardBatteryCodes.includes(item.batteryCode)
+  )
   const unresolvedCount = Math.max(standardBatteryCodes.length - batteries.length, 0)
   let dangerCount = unresolvedCount
   let warningCount = 0
@@ -364,17 +374,24 @@ const buildBatteryAlert = (
   }
 }
 
-const buildInspectionDueText = (record: Pick<
-  AssetDeviceMasterRecordVO,
-  'latestInspectionAt' | 'currentStatus' | 'latestInspectionConclusion' | 'parseUpdatedAt' | 'documents'
->) => {
+const buildInspectionDueText = (
+  record: Pick<
+    AssetDeviceMasterRecordVO,
+    | 'latestInspectionAt'
+    | 'currentStatus'
+    | 'latestInspectionConclusion'
+    | 'parseUpdatedAt'
+    | 'documents'
+  >
+) => {
   const archiveIncomplete = record.parseUpdatedAt === '-' || record.documents.length === 0
   if (archiveIncomplete) return '当前基础资料仍未补齐，建议先完善主档附件与履历'
   if (record.currentStatus === 'pending_release') return '维修或复检已完成，待放行审核闭环'
   if (!record.latestInspectionAt) return '暂无巡检记录，建议尽快完成首检或例行巡检'
   const days = Math.max(dayjs().diff(dayjs(record.latestInspectionAt), 'day'), 0)
   if (days >= 30) return `距上次巡检已 ${days} 天，已超过 30 天例行巡检周期`
-  if (record.currentStatus === 'pending_check') return `最近一次巡检结论为${record.latestInspectionConclusion}，建议优先复核`
+  if (record.currentStatus === 'pending_check')
+    return `最近一次巡检结论为${record.latestInspectionConclusion}，建议优先复核`
   return `最近一次巡检距今 ${days} 天，当前处于周期内`
 }
 
@@ -411,7 +428,9 @@ const deriveRecordState = (
   let warningSummary = '当前无显著风险'
   let recommendedAction = '可正常使用，按周期执行巡检'
 
-  if (hasPendingReleaseWorkorder(record.workorderSummary, record.currentStage, record.statusReason)) {
+  if (
+    hasPendingReleaseWorkorder(record.workorderSummary, record.currentStage, record.statusReason)
+  ) {
     currentStatus = 'pending_release'
     statusReason = '维修或复检已完成，当前仍待放行审核闭环'
     statusSource = '来源：工单流转'
@@ -555,9 +574,10 @@ const buildDocumentSummary = (documents: AssetDocumentVO[]) => {
 const buildBaseRecord = (device?: Partial<DvMachineryVO> | null): AssetDeviceMasterRecordVO => {
   const base = resolveAssetDeviceProfile(device)
   const code = device?.code || ''
-  const linkedBatteryCodes = code || device?.id
-    ? listLinkedBatteries(code, device?.id).map((item) => item.batteryCode)
-    : [...base.linkedBatteries]
+  const linkedBatteryCodes =
+    code || device?.id
+      ? listLinkedBatteries(code, device?.id).map((item) => item.batteryCode)
+      : [...base.linkedBatteries]
   const inspections = clone(seededInspections[code] || [])
   const latestInspection = inspections[0]
   const enableStatus: AssetDeviceEnableStatus = 'enabled'
@@ -576,7 +596,8 @@ const buildBaseRecord = (device?: Partial<DvMachineryVO> | null): AssetDeviceMas
     currentStage: base.currentStage,
     statusReason: base.statusReason,
     statusSource: base.statusSource,
-    statusUpdatedAt: base.parseUpdatedAt === '-' ? dayjs().format('YYYY-MM-DD HH:mm') : base.parseUpdatedAt,
+    statusUpdatedAt:
+      base.parseUpdatedAt === '-' ? dayjs().format('YYYY-MM-DD HH:mm') : base.parseUpdatedAt,
     warningLevel: 'info',
     warningLevelLabel: WARNING_LEVEL_META.info.label,
     warningSummary: '',
@@ -612,7 +633,9 @@ const normalizeRecord = (record: AssetDeviceMasterRecordVO): AssetDeviceMasterRe
     (item) => !(item.title === '建档附件重解析' && item.detail.includes('共处理 0 份附件'))
   )
   const normalizedWarnings = hasDocuments ? [...record.warnings] : [...documentSummary.warnings]
-  const normalizedMissingItems = hasDocuments ? [...record.missingItems] : [...documentSummary.missingItems]
+  const normalizedMissingItems = hasDocuments
+    ? [...record.missingItems]
+    : [...documentSummary.missingItems]
   const normalizedParseSummary = hasDocuments ? record.parseSummary : documentSummary.parseSummary
   const normalizedParseSource = hasDocuments ? record.parseSource : documentSummary.parseSource
   const normalizedParseUpdatedAt = hasDocuments ? record.parseUpdatedAt : '-'
@@ -660,8 +683,9 @@ const normalizeRecord = (record: AssetDeviceMasterRecordVO): AssetDeviceMasterRe
     linkedBatteries: [...record.linkedBatteries],
     standardBatteryCodes: [...record.standardBatteryCodes],
     inspections: clone(normalizedInspections),
-    latestAttachmentWarning:
-      hasDocuments ? record.latestAttachmentWarning : documentSummary.missingItems[0] || documentSummary.warnings[0] || ''
+    latestAttachmentWarning: hasDocuments
+      ? record.latestAttachmentWarning
+      : documentSummary.missingItems[0] || documentSummary.warnings[0] || ''
   }
 }
 
@@ -714,7 +738,9 @@ export const refreshAssetDeviceRuleRecord = async (device?: Partial<DvMachineryV
   return resolveAssetDeviceMasterRecord(device)
 }
 
-export const refreshAssetDeviceRuleRecords = async (devices: Array<Partial<DvMachineryVO> | null | undefined>) => {
+export const refreshAssetDeviceRuleRecords = async (
+  devices: Array<Partial<DvMachineryVO> | null | undefined>
+) => {
   await Promise.allSettled(devices.map((item) => refreshAssetDeviceRuleRecord(item)))
 }
 
@@ -733,7 +759,8 @@ export const saveAssetDeviceMasterRecord = (
 
   const duplicatedCode = Object.values(store).find(
     (item) =>
-      normalizeIdentityValue(item.code) === nextCode && normalizeIdentityValue(item.code) !== previousCode
+      normalizeIdentityValue(item.code) === nextCode &&
+      normalizeIdentityValue(item.code) !== previousCode
   )
   if (duplicatedCode) {
     throw new Error(`设备编号重复：${payload.code}`)
@@ -882,7 +909,101 @@ export const linkInspectionWorkorderToDevice = (
   return nextRecord
 }
 
-export const uploadAssetDeviceDocument = (
+const mergeRemoteDocumentParseResult = (
+  current: AssetDeviceMasterRecordVO,
+  payload: AssetDeviceDocumentUploadPayload,
+  remote: YianAssetDeviceDocumentParseRespVO
+) => {
+  const uploadedAt =
+    remote.parseUpdatedAt || payload.uploadedAt || dayjs().format('YYYY-MM-DD HH:mm')
+  return normalizeRecord({
+    ...current,
+    parseSummary: remote.parseSummary,
+    parseSource: remote.parseSource,
+    parseUpdatedAt: uploadedAt,
+    parsedFields: clone(remote.parsedFields || current.parsedFields),
+    warnings: [...(remote.warnings || [])],
+    missingItems: [...(remote.missingItems || [])],
+    latestAttachmentWarning: remote.warnings?.[0] || remote.missingItems?.[0] || '',
+    documents: clone(remote.documents || current.documents),
+    history: [
+      buildHistoryEvent(
+        '建档附件解析完成',
+        `${payload.uploadedBy} 上传并解析了 ${remote.documents?.length || payload.files?.length || 0} 份附件`,
+        '建档附件',
+        remote.mode === 'model' ? 'success' : 'warning',
+        uploadedAt,
+        `来源：${remote.parseSource}`
+      ),
+      ...current.history
+    ]
+  })
+}
+
+const syncAssetDeviceDocumentParseResult = (
+  device: Partial<DvMachineryVO> | null | undefined,
+  remote: YianAssetDeviceDocumentParseRespVO,
+  historyTitle: string,
+  historyDescription: string
+) => {
+  const current = resolveAssetDeviceMasterRecord(device)
+  const updatedAt = remote.parseUpdatedAt || dayjs().format('YYYY-MM-DD HH:mm')
+  const nextRecord = normalizeRecord({
+    ...current,
+    parseSummary: remote.parseSummary,
+    parseSource: remote.parseSource,
+    parseUpdatedAt: updatedAt,
+    parsedFields: clone(remote.parsedFields || current.parsedFields),
+    warnings: [...(remote.warnings || [])],
+    missingItems: [...(remote.missingItems || [])],
+    latestAttachmentWarning: remote.warnings?.[0] || remote.missingItems?.[0] || '',
+    documents: clone(remote.documents || current.documents),
+    history: [
+      buildHistoryEvent(
+        historyTitle,
+        historyDescription,
+        '建档附件',
+        remote.mode === 'model' ? 'success' : 'warning',
+        updatedAt,
+        `来源：${remote.parseSource}`
+      ),
+      ...current.history
+    ]
+  })
+  if (nextRecord.code) {
+    const store = getStore()
+    store[nextRecord.code] = nextRecord
+    setStore(store)
+  }
+  return nextRecord
+}
+
+export const hydrateAssetDeviceDocumentParseFromRemote = async (
+  device: Partial<DvMachineryVO> | null | undefined
+) => {
+  if (!device?.id && !device?.code) {
+    return resolveAssetDeviceMasterRecord(device)
+  }
+  try {
+    const remote = await YianAiApi.getLatestAssetDeviceDocuments({
+      machineryId: device?.id ? Number(device.id) : undefined,
+      code: device?.code || undefined
+    })
+    if (!remote) {
+      return resolveAssetDeviceMasterRecord(device)
+    }
+    return syncAssetDeviceDocumentParseResult(
+      device,
+      remote,
+      'Load persisted parse result',
+      `Loaded the latest persisted archive parse result with ${remote.documents?.length || 0} document(s).`
+    )
+  } catch {
+    return resolveAssetDeviceMasterRecord(device)
+  }
+}
+
+export const uploadAssetDeviceDocument = async (
   device: Partial<DvMachineryVO> | null | undefined,
   payload: AssetDeviceDocumentUploadPayload
 ) => {
@@ -890,6 +1011,28 @@ export const uploadAssetDeviceDocument = (
     ...device,
     code: payload.code
   })
+  if (payload.files?.length && device?.id) {
+    try {
+      const remote = await YianAiApi.parseAssetDeviceDocuments({
+        machineryId: Number(device.id),
+        code: payload.code,
+        uploadedBy: payload.uploadedBy,
+        files: payload.files
+      })
+      const nextRecord = mergeRemoteDocumentParseResult(current, payload, remote)
+      return syncAssetDeviceDocumentParseResult(
+        { ...device, code: payload.code },
+        {
+          ...remote,
+          parseUpdatedAt: nextRecord.parseUpdatedAt
+        },
+        '建档附件解析完成',
+        `${payload.uploadedBy} uploaded and parsed ${remote.documents?.length || payload.files?.length || 0} archive file(s).`
+      )
+    } catch {
+      // Fall back to the original local parser when the backend AI endpoint is unavailable.
+    }
+  }
   const uploadedAt = payload.uploadedAt || dayjs().format('YYYY-MM-DD HH:mm')
   const documentType = getDocumentTypeFromFileName(payload.fileName)
   const document: AssetDocumentVO = {
@@ -930,7 +1073,7 @@ export const uploadAssetDeviceDocument = (
   return nextRecord
 }
 
-export const reparseAssetDeviceDocuments = (
+export const reparseAssetDeviceDocuments = async (
   device: Partial<DvMachineryVO> | null | undefined,
   code: string,
   operator: string
@@ -941,6 +1084,50 @@ export const reparseAssetDeviceDocuments = (
   })
   if (!current.documents.length) {
     return current
+  }
+  if (device?.id) {
+    try {
+      const remote = await YianAiApi.reparseAssetDeviceDocuments({
+        machineryId: Number(device.id),
+        code,
+        operator,
+        fileNames: current.documents.map((item) => item.fileName)
+      })
+      return syncAssetDeviceDocumentParseResult(
+        { ...device, code },
+        remote,
+        '建档附件重新解析完成',
+        `${operator} re-ran archive parsing for ${current.documents.length} file(s).`
+      )
+      const nextRecord = normalizeRecord({
+        ...current,
+        parseSummary: remote.parseSummary,
+        parseSource: remote.parseSource,
+        parseUpdatedAt: remote.parseUpdatedAt,
+        parsedFields: clone(remote.parsedFields || current.parsedFields),
+        warnings: [...(remote.warnings || [])],
+        missingItems: [...(remote.missingItems || [])],
+        latestAttachmentWarning: remote.warnings?.[0] || remote.missingItems?.[0] || '',
+        documents: clone(remote.documents || current.documents),
+        history: [
+          buildHistoryEvent(
+            '建档附件重新解析',
+            `${operator} 触发建档附件重新解析，共处理 ${current.documents.length} 份附件`,
+            '建档附件',
+            remote.mode === 'model' ? 'success' : 'warning',
+            remote.parseUpdatedAt,
+            `来源：${remote.parseSource}`
+          ),
+          ...current.history
+        ]
+      })
+      const store = getStore()
+      store[code] = nextRecord
+      setStore(store)
+      return nextRecord
+    } catch {
+      // Fall back to the original local parser when the backend AI endpoint is unavailable.
+    }
   }
   const updatedAt = dayjs().format('YYYY-MM-DD HH:mm')
   const summary = buildDocumentSummary(current.documents)
@@ -975,7 +1162,9 @@ export const reparseAssetDeviceDocuments = (
   return nextRecord
 }
 
-export const getDeviceEnableStatusByMachineryStatus = (status?: number): AssetDeviceEnableStatus => {
+export const getDeviceEnableStatusByMachineryStatus = (
+  status?: number
+): AssetDeviceEnableStatus => {
   return status === MesDvMachineryStatusEnum.STOP ? 'disabled' : 'enabled'
 }
 
