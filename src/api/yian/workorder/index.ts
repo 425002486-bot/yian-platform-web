@@ -300,6 +300,37 @@ const localizeDiagnosisParts = (parts?: string[]) =>
     }
   })
 
+const localizeTimelineText = (value?: string) => {
+  const normalized = (value || '').trim()
+  switch (normalized) {
+    case '宸ュ崟鍒涘缓':
+      return '工单创建'
+    case '鎻愪氦缁翠慨缁撴灉':
+      return '提交维修结果'
+    case '澶嶆閫氳繃':
+      return '复检通过'
+    case '澶嶆鏈€氳繃':
+      return '复检未通过'
+    case '鏀捐椹冲洖':
+      return '放行驳回'
+    case '瀹屾垚鏀捐':
+      return '完成放行'
+    default:
+      break
+  }
+
+  return normalized
+    .replace('鎻愪氦寮傚父宸ュ崟', '提交异常工单')
+    .replace('琛ュ厖', '补充')
+}
+
+const normalizeTimelineItem = (item: WorkorderTimelineItem): WorkorderTimelineItem => ({
+  ...item,
+  title: localizeTimelineText(item.title),
+  detail: localizeTimelineText(item.detail),
+  operator: item.operator || '系统'
+})
+
 const normalizeDiagnosisRecord = (diagnosis?: WorkorderStageRecordDiagnosis) => {
   if (!diagnosis) {
     return diagnosis
@@ -316,7 +347,8 @@ const normalizeDiagnosisRecord = (diagnosis?: WorkorderStageRecordDiagnosis) => 
 
 const normalizeWorkorderEntity = (order: WorkorderEntity): WorkorderEntity => ({
   ...order,
-  diagnosis: normalizeDiagnosisRecord(order.diagnosis)
+  diagnosis: normalizeDiagnosisRecord(order.diagnosis),
+  timeline: (order.timeline || []).map(normalizeTimelineItem)
 })
 
 const createTimeline = (
@@ -725,7 +757,7 @@ export const YianWorkorderApi = {
       slaDeadline: resolveStageSlaDeadline('pending'),
       status: 'pending',
       timeline: [
-        createTimeline('pending', '宸ュ崟鍒涘缓', `${SOURCE_LABEL_MAP[data.source]}鎻愪氦寮傚父宸ュ崟`, data.creator)
+        createTimeline('pending', '工单创建', `${SOURCE_LABEL_MAP[data.source]}提交异常工单`, data.creator)
       ]
     }
     orders.unshift(order)
@@ -745,7 +777,7 @@ export const YianWorkorderApi = {
       draft.timeline.push(
         createTimeline(
           draft.status,
-          `琛ュ厖${label}`,
+          `补充${label}`,
           `${payload.operator} 新增 ${payload.files.length} 份${label}`,
           payload.operator,
           uploadedAt
@@ -836,7 +868,7 @@ export const YianWorkorderApi = {
       draft.slaDeadline = resolveStageSlaDeadline('inspecting')
       draft.repair = { ...payload, repairedAt: now() }
       draft.timeline.push(
-        createTimeline('inspecting', '鎻愪氦缁翠慨缁撴灉', payload.result, payload.technician)
+        createTimeline('inspecting', '提交维修结果', payload.result, payload.technician)
       )
     })
   },
@@ -855,13 +887,13 @@ export const YianWorkorderApi = {
         draft.status = 'releasing'
         draft.slaDeadline = resolveStageSlaDeadline('releasing')
         draft.timeline.push(
-          createTimeline('releasing', '澶嶆閫氳繃', payload.conclusion, payload.inspector)
+          createTimeline('releasing', '复检通过', payload.conclusion, payload.inspector)
         )
       } else {
         draft.status = 'repairing'
         draft.slaDeadline = resolveStageSlaDeadline('repairing')
         draft.timeline.push(
-          createTimeline('repairing', '澶嶆鏈€氳繃', payload.conclusion, payload.inspector)
+          createTimeline('repairing', '复检未通过', payload.conclusion, payload.inspector)
         )
       }
     })
@@ -882,12 +914,12 @@ export const YianWorkorderApi = {
         draft.status = 'repairing'
         draft.slaDeadline = resolveStageSlaDeadline('repairing')
         draft.timeline.push(
-          createTimeline('repairing', '鏀捐椹冲洖', payload.conclusion, payload.reviewer)
+          createTimeline('repairing', '放行驳回', payload.conclusion, payload.reviewer)
         )
       } else {
         draft.status = 'completed'
         draft.timeline.push(
-          createTimeline('completed', '瀹屾垚鏀捐', payload.conclusion, payload.reviewer)
+          createTimeline('completed', '完成放行', payload.conclusion, payload.reviewer)
         )
       }
     })

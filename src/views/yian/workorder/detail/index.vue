@@ -186,59 +186,115 @@
         </el-table>
       </el-dialog>
 
-      <el-dialog v-model="imageImportDialogVisible" title="补录图片" width="640px">
-        <el-upload
-          drag
-          :auto-upload="false"
-          :multiple="true"
-          :limit="12"
-          :file-list="imageUploadList"
-          accept="image/*"
-          @change="handleImageUploadChange"
-          @remove="handleImageUploadRemove"
-        >
-          <div class="el-upload__text">将现场图片拖到此处，或 <em>点击选择文件</em></div>
-          <template #tip>
-            <div class="el-upload__tip"
-              >支持 JPG、PNG、WebP 等图片格式，建议补充故障现场照片与截图</div
-            >
-          </template>
-        </el-upload>
+      <el-dialog
+        v-model="imageImportDialogVisible"
+        title="补录图片"
+        width="640px"
+        :close-on-click-modal="!imageImportSubmitting"
+        :close-on-press-escape="!imageImportSubmitting"
+        :show-close="!imageImportSubmitting"
+        :before-close="handleImageImportDialogClose"
+      >
+        <div v-loading="imageImportSubmitting" element-loading-text="正在补录现场图片，请稍候...">
+          <el-alert
+            v-if="imageImportSubmitting"
+            type="info"
+            :closable="false"
+            show-icon
+            class="mb-16px"
+            title="系统正在处理现场图片"
+            description="补录完成后会自动刷新当前工单的附件区域。"
+          />
+          <el-upload
+            drag
+            :auto-upload="false"
+            :multiple="true"
+            :limit="12"
+            :disabled="imageImportSubmitting"
+            :file-list="imageUploadList"
+            accept="image/*"
+            @change="handleImageUploadChange"
+            @remove="handleImageUploadRemove"
+          >
+            <div class="el-upload__text">将现场图片拖到此处，或 <em>点击选择文件</em></div>
+            <template #tip>
+              <div class="el-upload__tip"
+                >支持 JPG、PNG、WebP 等图片格式，建议补充故障现场照片与截图</div
+              >
+              <div v-if="imageUploadList.length" class="import-selection-tip">
+                已选择 {{ imageUploadList.length }} 份图片，将统一补录
+              </div>
+            </template>
+          </el-upload>
+        </div>
         <template #footer>
           <el-space wrap>
-            <el-button @click="imageImportDialogVisible = false">取消</el-button>
+            <el-button :disabled="imageImportSubmitting" @click="imageImportDialogVisible = false"
+              >取消</el-button
+            >
             <el-button
               type="primary"
+              :loading="imageImportSubmitting"
               :disabled="!imageUploadList.length"
               @click="submitImageImport"
             >
-              确认补录
+              {{ imageImportSubmitting ? '正在补录...' : '确认补录' }}
             </el-button>
           </el-space>
         </template>
       </el-dialog>
 
-      <el-dialog v-model="logImportDialogVisible" title="导入日志" width="640px">
-        <el-upload
-          drag
-          :auto-upload="false"
-          :multiple="true"
-          :limit="8"
-          :file-list="logUploadList"
-          accept=".log,.txt,.csv,.json,.zip,.rar,.7z"
-          @change="handleLogUploadChange"
-          @remove="handleLogUploadRemove"
-        >
-          <div class="el-upload__text">将日志文件拖到此处，或 <em>点击选择文件</em></div>
-          <template #tip>
-            <div class="el-upload__tip">支持飞控日志、检测报告、压缩包等日志附件</div>
-          </template>
-        </el-upload>
+      <el-dialog
+        v-model="logImportDialogVisible"
+        title="导入日志"
+        width="640px"
+        :close-on-click-modal="!logImportSubmitting"
+        :close-on-press-escape="!logImportSubmitting"
+        :show-close="!logImportSubmitting"
+        :before-close="handleLogImportDialogClose"
+      >
+        <div v-loading="logImportSubmitting" element-loading-text="正在导入并解析日志，请稍候...">
+          <el-alert
+            v-if="logImportSubmitting"
+            type="info"
+            :closable="false"
+            show-icon
+            class="mb-16px"
+            title="系统正在处理日志"
+            description="导入完成后会自动刷新工单附件区域，并更新日志解析摘要。"
+          />
+          <el-upload
+            drag
+            :auto-upload="false"
+            :multiple="true"
+            :limit="8"
+            :disabled="logImportSubmitting"
+            :file-list="logUploadList"
+            accept=".log,.txt,.csv,.json,.zip,.rar,.7z"
+            @change="handleLogUploadChange"
+            @remove="handleLogUploadRemove"
+          >
+            <div class="el-upload__text">将日志文件拖到此处，或 <em>点击选择文件</em></div>
+            <template #tip>
+              <div class="el-upload__tip">支持飞控日志、检测报告、压缩包等日志附件</div>
+              <div v-if="logUploadList.length" class="import-selection-tip">
+                已选择 {{ logUploadList.length }} 份日志，将统一导入并解析
+              </div>
+            </template>
+          </el-upload>
+        </div>
         <template #footer>
           <el-space wrap>
-            <el-button @click="logImportDialogVisible = false">取消</el-button>
-            <el-button type="primary" :disabled="!logUploadList.length" @click="submitLogImport">
-              确认导入
+            <el-button :disabled="logImportSubmitting" @click="logImportDialogVisible = false"
+              >取消</el-button
+            >
+            <el-button
+              type="primary"
+              :loading="logImportSubmitting"
+              :disabled="!logUploadList.length"
+              @click="submitLogImport"
+            >
+              {{ logImportSubmitting ? '正在导入...' : '确认导入' }}
             </el-button>
           </el-space>
         </template>
@@ -1067,6 +1123,8 @@ const logImportDialogVisible = ref(false)
 const diagnosisAssistantVisible = ref(false)
 const imageUploadList = ref<UploadUserFile[]>([])
 const logUploadList = ref<UploadUserFile[]>([])
+const imageImportSubmitting = ref(false)
+const logImportSubmitting = ref(false)
 const pendingLogUploadFiles = ref<UploadFile[]>([])
 const pendingImageAttachments = ref<WorkorderAttachmentItem[]>([])
 const pendingLogAttachments = ref<WorkorderAttachmentItem[]>([])
@@ -1079,6 +1137,18 @@ const diagnosisAssistantStreaming = ref(false)
 const diagnosisAssistantBootstrapping = ref(false)
 const diagnosisAssistantContextDirty = ref(false)
 const diagnosisAssistantAbortController = ref<AbortController | null>(null)
+const handleImageImportDialogClose = (done: () => void) => {
+  if (imageImportSubmitting.value) {
+    return
+  }
+  done()
+}
+const handleLogImportDialogClose = (done: () => void) => {
+  if (logImportSubmitting.value) {
+    return
+  }
+  done()
+}
 const diagnosisAssistantHasLogContext = computed(
   () => !!flightLogAssistantSummary.value || !!pendingLogAttachments.value.length || !!logAttachments.value.length
 )
@@ -1748,6 +1818,80 @@ const buildDiagnosisAssistantContextPrompt = (kind: 'initial' | 'refresh') => {
 请先给出当前判断，再提出下一轮最关键的追问；如果信息已经足够，也要直接收敛出可写入初诊表单的 diagnosis_draft。`
 }
 
+const buildDiagnosisAssistantContextPromptV2 = (kind: 'initial' | 'refresh') => {
+  if (!order.value) {
+    return `${DIAGNOSIS_ASSISTANT_CONTEXT_MARK}\n当前工单上下文缺失，请提示用户稍后重试。`
+  }
+  const diagnosis = order.value.diagnosis
+  const imageNames = imageAttachments.value.length
+    ? imageAttachments.value.map((item) => item.name).join('、')
+    : '暂无现场附件'
+  const logNames = logAttachments.value.length
+    ? logAttachments.value.map((item) => item.name).join('、')
+    : '暂无飞行日志'
+  const formDraftSummary = [
+    diagnoseForm.faultCategory ? `故障分类：${diagnoseForm.faultCategory}` : '',
+    diagnoseForm.probableCause ? `疑似原因：${diagnoseForm.probableCause}` : '',
+    diagnoseForm.conclusion ? `处理建议：${diagnoseForm.conclusion}` : ''
+  ]
+    .filter(Boolean)
+    .join('；')
+  const latestLogSummary = flightLogAssistantSummary.value.trim() || '暂无可用的飞行日志解析摘要'
+  const latestImageSummary = imageSummaryText.value.trim() || '暂无现场图片摘要'
+
+  return `${DIAGNOSIS_ASSISTANT_CONTEXT_MARK}
+当前模式：${kind === 'initial' ? '首轮初诊' : '上下文刷新后继续初诊'}
+请基于以下上下文继续完成初诊助手职责：
+
+工单号：${order.value.orderNo}
+设备：${order.value.deviceCode} / ${order.value.deviceName}
+站点：${order.value.siteName}
+任务场景：${taskSceneText.value}
+当前状态：${order.value.statusLabel}
+异常现象：${order.value.symptom}
+现场描述：${order.value.description || '暂无现场描述'}
+飞行日志状态：${logAttachments.value.length ? `已导入（${logNames}）` : '尚未导入原始飞行日志'}
+最近一次飞行日志解析摘要：${latestLogSummary}
+现场附件状态：${imageAttachments.value.length ? `已导入（${imageNames}）` : '尚未导入现场图片或截图'}
+最近一次现场附件摘要：${latestImageSummary}
+当前人工表单草稿：${formDraftSummary || '尚未填写'}
+已有历史初诊：${diagnosis ? `${diagnosis.faultCategory} / ${diagnosis.probableCause} / ${diagnosis.conclusion}` : '暂无'}
+
+请优先基于“最近一次飞行日志解析摘要”和“最近一次现场附件摘要”进行判断，不要在后续对话中再说“没有看到日志内容”，除非上述摘要明确为空或缺失。
+如果某个判断来自人工异常现象或现场描述，请明确标注“来自人工反馈”；如果来自日志解析摘要，请明确标注“来自日志解析”。
+请先给出当前判断，再提出下一轮最关键的追问；如果信息已经足够，也要直接收敛输出可写入初诊表单的 diagnosis_draft。`
+}
+
+const buildDiagnosisAssistantSystemMessageV2 = () => `你是“翼安智链”维修工单里的 AI 初诊助手，服务对象是机务与维修工程师。
+你的目标是基于工单、飞行日志解析摘要、现场附件摘要和聊天上下文，持续追问并收敛出可写入初诊表单的结构化结论。
+
+你必须遵守以下规则：
+1. 优先基于“日志解析摘要”和“现场附件摘要”判断，不要忽略已有证据。
+2. 如果信息不足，只追问当前最关键的 1 到 3 个问题。
+3. 你的自然语言回复必须固定分为三段：
+【日志已证实】
+【人工反馈】
+【待确认项】
+如果某一段没有内容，也要明确写“暂无”。
+4. 所有判断都要尽量标注来源：
+- 来自日志解析
+- 来自人工反馈
+- 待进一步确认
+5. 不要在后续对话里反复说“没有看到日志内容”，除非上下文明确说明日志摘要为空。
+6. 每次回复末尾都必须附带一个 <diagnosis_draft>...</diagnosis_draft> 标签。
+7. diagnosis_draft 必须是合法 JSON，且至少包含：
+{
+  "faultCategory": "字符串",
+  "probableCause": "字符串",
+  "riskLevel": "high|medium|low",
+  "groundedSuggestion": true,
+  "needParts": true,
+  "suggestedParts": ["字符串"],
+  "conclusion": "字符串"
+}
+8. 即使信息不足，也要输出“当前版本”的 diagnosis_draft，并在【待确认项】里写清楚不确定点。
+9. 你不能宣称已经自动提交工单，也不能自动推进节点；最终以人工确认提交为准。`
+
 const persistDiagnosisAssistantConversationId = (conversationId: number | null) => {
   const key = getDiagnosisAssistantStorageKey()
   if (!key) {
@@ -1833,7 +1977,7 @@ const ensureDiagnosisAssistantConversation = async (): Promise<number> => {
   await ChatConversationApi.updateChatConversationMy({
     id: diagnosisAssistantConversationId.value,
     title: `工单初诊助手-${order.value.orderNo}`,
-    systemMessage: buildDiagnosisAssistantSystemMessage(),
+    systemMessage: buildDiagnosisAssistantSystemMessageV2(),
     temperature: 0.2,
     maxContexts: 20
   })
@@ -1929,11 +2073,11 @@ const bootstrapDiagnosisAssistant = async () => {
     await ensureDiagnosisAssistantConversation()
     await syncDiagnosisAssistantMessagesFromConversation()
     if (!diagnosisAssistantMessages.value.length) {
-      await sendDiagnosisAssistantMessage(buildDiagnosisAssistantContextPrompt('initial'), {
+      await sendDiagnosisAssistantMessage(buildDiagnosisAssistantContextPromptV2('initial'), {
         hiddenUserMessage: true
       })
     } else if (diagnosisAssistantContextDirty.value) {
-      await sendDiagnosisAssistantMessage(buildDiagnosisAssistantContextPrompt('refresh'), {
+      await sendDiagnosisAssistantMessage(buildDiagnosisAssistantContextPromptV2('refresh'), {
         hiddenUserMessage: true
       })
     }
@@ -2517,17 +2661,22 @@ const submitImageImport = async () => {
     message.warning('请先选择要补录的图片文件')
     return
   }
-  YianWorkorderApi.appendAttachments(order.value.id, {
-    type: 'image',
-    files: pendingImageAttachments.value,
-    operator: currentOperatorName.value
-  })
-  message.success(`已补录 ${pendingImageAttachments.value.length} 份现场图片`)
-  imageImportDialogVisible.value = false
-  imageUploadList.value = []
-  pendingImageAttachments.value = []
-  diagnosisAssistantContextDirty.value = true
-  await loadOrder()
+  imageImportSubmitting.value = true
+  try {
+    YianWorkorderApi.appendAttachments(order.value.id, {
+      type: 'image',
+      files: pendingImageAttachments.value,
+      operator: currentOperatorName.value
+    })
+    message.success(`已补录 ${pendingImageAttachments.value.length} 份现场图片`)
+    imageImportDialogVisible.value = false
+    imageUploadList.value = []
+    pendingImageAttachments.value = []
+    diagnosisAssistantContextDirty.value = true
+    await loadOrder()
+  } finally {
+    imageImportSubmitting.value = false
+  }
 }
 
 const submitLogImport = async () => {
@@ -2535,41 +2684,46 @@ const submitLogImport = async () => {
     message.warning('请先选择要导入的日志文件')
     return
   }
-  const rawFiles = pendingLogUploadFiles.value.map((item) => item.raw).filter(Boolean) as File[]
-  if (rawFiles.length) {
-    try {
-      const parsed = await YianAiApi.parseWorkorderFlightLogs({
-        workorderId: order.value.id,
-        orderNo: order.value.orderNo,
-        deviceCode: order.value.deviceCode,
-        uploadedBy: currentOperatorName.value,
-        files: rawFiles
-      })
-      if (parsed.attachments?.length) {
-        pendingLogAttachments.value = parsed.attachments.map((item) => ({
-          name: item.name,
-          type: 'log',
-          size: item.size,
-          mimeType: item.mimeType
-        }))
+  logImportSubmitting.value = true
+  try {
+    const rawFiles = pendingLogUploadFiles.value.map((item) => item.raw).filter(Boolean) as File[]
+    if (rawFiles.length) {
+      try {
+        const parsed = await YianAiApi.parseWorkorderFlightLogs({
+          workorderId: order.value.id,
+          orderNo: order.value.orderNo,
+          deviceCode: order.value.deviceCode,
+          uploadedBy: currentOperatorName.value,
+          files: rawFiles
+        })
+        if (parsed.attachments?.length) {
+          pendingLogAttachments.value = parsed.attachments.map((item) => ({
+            name: item.name,
+            type: 'log',
+            size: item.size,
+            mimeType: item.mimeType
+          }))
+        }
+        flightLogAssistantSummary.value = parsed.assistantContextSummary || parsed.summary || ''
+      } catch {
+        // Keep local metadata as fallback.
       }
-      flightLogAssistantSummary.value = parsed.assistantContextSummary || parsed.summary || ''
-    } catch {
-      // Keep local metadata as fallback.
     }
+    YianWorkorderApi.appendAttachments(order.value.id, {
+      type: 'log',
+      files: pendingLogAttachments.value,
+      operator: currentOperatorName.value
+    })
+    message.success(`已补录 ${pendingLogAttachments.value.length} 份日志附件`)
+    logImportDialogVisible.value = false
+    logUploadList.value = []
+    pendingLogUploadFiles.value = []
+    pendingLogAttachments.value = []
+    diagnosisAssistantContextDirty.value = true
+    await loadOrder()
+  } finally {
+    logImportSubmitting.value = false
   }
-  YianWorkorderApi.appendAttachments(order.value.id, {
-    type: 'log',
-    files: pendingLogAttachments.value,
-    operator: currentOperatorName.value
-  })
-  message.success(`已补录 ${pendingLogAttachments.value.length} 份日志附件`)
-  logImportDialogVisible.value = false
-  logUploadList.value = []
-  pendingLogUploadFiles.value = []
-  pendingLogAttachments.value = []
-  diagnosisAssistantContextDirty.value = true
-  await loadOrder()
 }
 
 const applyDiagnosisAssistant = () => {
@@ -3273,6 +3427,11 @@ watch(
 
 .text-danger {
   color: var(--el-color-danger);
+}
+
+.import-selection-tip {
+  margin-top: 8px;
+  color: var(--el-color-primary);
 }
 
 :deep(.el-upload-dragger) {

@@ -277,6 +277,147 @@ const normalizeIdentityValue = (value?: string) =>
     .trim()
     .toUpperCase()
 
+const normalizeParsedFieldLabel = (value?: string) =>
+  String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, '_')
+
+const DOCUMENT_DEVICE_CODE_LABELS = new Set([
+  'device_code',
+  'devicecode',
+  'device_id',
+  'drone_code',
+  'aircraft_code',
+  '设备编号',
+  '设备编码',
+  '主机编号',
+  '主机编码'
+])
+
+const DOCUMENT_DEVICE_SN_LABELS = new Set([
+  'serial_number',
+  'serialnumber',
+  'serial_no',
+  'serial',
+  'device_sn',
+  'drone_sn',
+  'aircraft_sn',
+  '设备sn',
+  '设备序列号',
+  '序列号',
+  'sn号'
+])
+
+const DOCUMENT_DEVICE_CODE_REGEX =
+  /(device[_ -]?code|device[_ -]?id|drone[_ -]?code|aircraft[_ -]?code|设备编号|设备编码|主机编号|主机编码)\s*[:=：]\s*([A-Za-z0-9\-_\/]+)/gi
+
+const DOCUMENT_DEVICE_SN_REGEX =
+  /(serial[_ -]?number|serial[_ -]?no|device[_ -]?sn|drone[_ -]?sn|aircraft[_ -]?sn|设备SN|设备序列号|序列号|SN号)\s*[:=：]\s*([A-Za-z0-9\-_\/]+)/gi
+
+const appendIdentityCandidate = (target: Set<string>, value?: string) => {
+  const normalized = normalizeIdentityValue(value)
+  if (!normalized || normalized === '-') return
+  target.add(normalized)
+}
+
+const collectIdentityFromObject = (
+  input: Record<string, unknown>,
+  deviceCodes: Set<string>,
+  deviceSns: Set<string>
+) => {
+  Object.entries(input).forEach(([key, value]) => {
+    const normalizedKey = normalizeParsedFieldLabel(key)
+    const stringValue = typeof value === 'string' ? value : value == null ? '' : String(value)
+    if (DOCUMENT_DEVICE_CODE_LABELS.has(normalizedKey)) {
+      appendIdentityCandidate(deviceCodes, stringValue)
+    }
+    if (DOCUMENT_DEVICE_SN_LABELS.has(normalizedKey)) {
+      appendIdentityCandidate(deviceSns, stringValue)
+    }
+  })
+}
+
+const collectIdentityFromText = (
+  input: string,
+  deviceCodes: Set<string>,
+  deviceSns: Set<string>
+) => {
+  Array.from(input.matchAll(DOCUMENT_DEVICE_CODE_REGEX)).forEach((match) =>
+    appendIdentityCandidate(deviceCodes, match[2])
+  )
+  Array.from(input.matchAll(DOCUMENT_DEVICE_SN_REGEX)).forEach((match) =>
+    appendIdentityCandidate(deviceSns, match[2])
+  )
+}
+
+const collectRemoteDocumentIdentity = (remote: YianAssetDeviceDocumentParseRespVO) => {
+  const deviceCodes = new Set<string>()
+  const deviceSns = new Set<string>()
+  ;(remote.parsedFields || []).forEach((item) => {
+    const normalizedLabel = normalizeParsedFieldLabel(item.label)
+    if (DOCUMENT_DEVICE_CODE_LABELS.has(normalizedLabel)) {
+      appendIdentityCandidate(deviceCodes, item.value)
+    }
+    if (DOCUMENT_DEVICE_SN_LABELS.has(normalizedLabel)) {
+      appendIdentityCandidate(deviceSns, item.value)
+    }
+  })
+  ;(remote.documents || []).forEach((item) => {
+    const parseResult = item.parseResult
+    if (!parseResult) return
+    if (typeof parseResult === 'string') {
+      const trimmed = parseResult.trim()
+      if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+        try {
+          const parsed = JSON.parse(trimmed) as Record<string, unknown>
+          collectIdentityFromObject(parsed, deviceCodes, deviceSns)
+          return
+        } catch {
+          // Fall through to regex extraction when parseResult is not valid JSON.
+        }
+      }
+      collectIdentityFromText(trimmed, deviceCodes, deviceSns)
+    }
+  })
+  return {
+    deviceCodes: [...deviceCodes],
+    deviceSns: [...deviceSns]
+  }
+}
+
+const mergeIdentityWarnings = (
+  current: Pick<AssetDeviceMasterRecordVO, 'code' | 'serialNumber'>,
+  remote: YianAssetDeviceDocumentParseRespVO
+) => {
+  const nextWarnings = [...(remote.warnings || [])]
+  const extractedIdentity = collectRemoteDocumentIdentity(remote)
+  const currentCode = normalizeIdentityValue(current.code)
+  const currentSerialNumber = normalizeIdentityValue(current.serialNumber)
+
+  if (
+    currentCode &&
+    extractedIdentity.deviceCodes.length > 0 &&
+    !extractedIdentity.deviceCodes.includes(currentCode)
+  ) {
+    nextWarnings.unshift(
+      `资料解析识别到的设备编号（${extractedIdentity.deviceCodes.join('、')}）与当前设备编号（${current.code}）不一致，请核对是否上传了错误附件。`
+    )
+  }
+
+  if (
+    currentSerialNumber &&
+    extractedIdentity.deviceSns.length > 0 &&
+    !extractedIdentity.deviceSns.includes(currentSerialNumber)
+  ) {
+    nextWarnings.unshift(
+      `资料解析识别到的设备序列号（${extractedIdentity.deviceSns.join('、')}）与当前序列号（${current.serialNumber}）不一致，请核对主档或附件内容。`
+    )
+  }
+
+  return [...new Set(nextWarnings.map((item) => item.trim()).filter(Boolean))]
+}
+
 const isAircraftMachineryType = (value?: string) => value === AIRCRAFT_MACHINERY_TYPE_NAME
 
 const hasPendingReleaseWorkorder = (summary: string, stage?: string, reason?: string) => {
@@ -916,15 +1057,16 @@ const mergeRemoteDocumentParseResult = (
 ) => {
   const uploadedAt =
     remote.parseUpdatedAt || payload.uploadedAt || dayjs().format('YYYY-MM-DD HH:mm')
+  const mergedWarnings = mergeIdentityWarnings(current, remote)
   return normalizeRecord({
     ...current,
     parseSummary: remote.parseSummary,
     parseSource: remote.parseSource,
     parseUpdatedAt: uploadedAt,
     parsedFields: clone(remote.parsedFields || current.parsedFields),
-    warnings: [...(remote.warnings || [])],
+    warnings: mergedWarnings,
     missingItems: [...(remote.missingItems || [])],
-    latestAttachmentWarning: remote.warnings?.[0] || remote.missingItems?.[0] || '',
+    latestAttachmentWarning: mergedWarnings[0] || remote.missingItems?.[0] || '',
     documents: clone(remote.documents || current.documents),
     history: [
       buildHistoryEvent(
@@ -948,15 +1090,16 @@ const syncAssetDeviceDocumentParseResult = (
 ) => {
   const current = resolveAssetDeviceMasterRecord(device)
   const updatedAt = remote.parseUpdatedAt || dayjs().format('YYYY-MM-DD HH:mm')
+  const mergedWarnings = mergeIdentityWarnings(current, remote)
   const nextRecord = normalizeRecord({
     ...current,
     parseSummary: remote.parseSummary,
     parseSource: remote.parseSource,
     parseUpdatedAt: updatedAt,
     parsedFields: clone(remote.parsedFields || current.parsedFields),
-    warnings: [...(remote.warnings || [])],
+    warnings: mergedWarnings,
     missingItems: [...(remote.missingItems || [])],
-    latestAttachmentWarning: remote.warnings?.[0] || remote.missingItems?.[0] || '',
+    latestAttachmentWarning: mergedWarnings[0] || remote.missingItems?.[0] || '',
     documents: clone(remote.documents || current.documents),
     history: [
       buildHistoryEvent(
@@ -1034,18 +1177,28 @@ export const uploadAssetDeviceDocument = async (
     }
   }
   const uploadedAt = payload.uploadedAt || dayjs().format('YYYY-MM-DD HH:mm')
-  const documentType = getDocumentTypeFromFileName(payload.fileName)
-  const document: AssetDocumentVO = {
-    id: `asset-document-${payload.code}-${Date.now()}`,
-    fileName: payload.fileName,
-    documentType,
-    parseResult: buildDocumentParseResult(documentType),
-    parseSource: '人工补录',
-    uploadedBy: payload.uploadedBy,
-    uploadedAt
-  }
-  const documents = [document, ...current.documents]
+  const uploadedFiles =
+    payload.files?.length && payload.files.some((item) => item?.name)
+      ? payload.files.map((item) => item.name)
+      : [payload.fileName]
+  const fallbackDocuments = uploadedFiles.map((fileName, index) => {
+    const documentType = getDocumentTypeFromFileName(fileName)
+    const document: AssetDocumentVO = {
+      id: `asset-document-${payload.code}-${Date.now()}-${index}`,
+      fileName,
+      documentType,
+      parseResult: buildDocumentParseResult(documentType),
+      parseSource: '人工补录',
+      uploadedBy: payload.uploadedBy,
+      uploadedAt
+    }
+    return { document, documentType }
+  })
+  const documents = [...fallbackDocuments.map((item) => item.document), ...current.documents]
   const summary = buildDocumentSummary(documents)
+  const uploadedCount = fallbackDocuments.length
+  const uploadedNames = fallbackDocuments.map((item) => item.document.fileName).join('、')
+  const fallbackSourceSummary = [...new Set(fallbackDocuments.map((item) => item.documentType))].join('、')
   const nextRecord = normalizeRecord({
     ...current,
     parseSummary: summary.parseSummary,
@@ -1058,11 +1211,11 @@ export const uploadAssetDeviceDocument = async (
     history: [
       buildHistoryEvent(
         '建档附件上传',
-        `${payload.uploadedBy} 上传了 ${payload.fileName}`,
+        `${payload.uploadedBy} 上传了 ${uploadedCount} 份附件：${uploadedNames}`,
         '建档附件',
         'info',
         uploadedAt,
-        `来源：${documentType}`
+        `来源：${fallbackSourceSummary}`
       ),
       ...current.history
     ]

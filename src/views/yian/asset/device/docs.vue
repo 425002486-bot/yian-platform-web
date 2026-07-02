@@ -84,28 +84,59 @@
 
     <el-empty v-else description="未找到对应设备数据" class="mt-20px" />
 
-    <el-dialog v-model="uploadDialogVisible" title="上传建档附件" width="640px">
-      <el-upload
-        drag
-        :auto-upload="false"
-        :multiple="true"
-        :limit="10"
-        :file-list="uploadList"
-        @change="handleUploadChange"
-        @remove="handleUploadRemove"
+    <el-dialog
+      v-model="uploadDialogVisible"
+      title="上传建档附件"
+      width="640px"
+      :close-on-click-modal="!uploadSubmitting"
+      :close-on-press-escape="!uploadSubmitting"
+      :show-close="!uploadSubmitting"
+      :before-close="handleUploadDialogClose"
+    >
+      <div
+        v-loading="uploadSubmitting"
+        element-loading-text="正在上传附件并解析资料，请稍候..."
       >
-        <Icon icon="ep:upload-filled" class="mb-12px text-28px" />
-        <div class="el-upload__text">将建档附件拖到此处，或 <em>点击选择文件</em></div>
-        <template #tip>
-          <div class="el-upload__tip">支持图片、PDF、Word、Excel、日志压缩包等建档附件</div>
-        </template>
-      </el-upload>
+        <el-alert
+          v-if="uploadSubmitting"
+          type="info"
+          :closable="false"
+          show-icon
+          class="mb-16px"
+          title="系统正在处理附件"
+          description="上传完成后会自动关闭弹窗，并刷新当前附件列表和解析摘要。"
+        />
+        <el-upload
+          drag
+          :auto-upload="false"
+          :multiple="true"
+          :limit="10"
+          :disabled="uploadSubmitting"
+          :file-list="uploadList"
+          @change="handleUploadChange"
+          @remove="handleUploadRemove"
+        >
+          <Icon icon="ep:upload-filled" class="mb-12px text-28px" />
+          <div class="el-upload__text">将建档附件拖到此处，或 <em>点击选择文件</em></div>
+          <template #tip>
+            <div class="el-upload__tip">支持图片、PDF、Word、Excel、日志压缩包等建档附件</div>
+            <div v-if="uploadList.length" class="upload-selection-tip">
+              已选择 {{ uploadList.length }} 份附件，可一次性上传并处理多份文件
+            </div>
+          </template>
+        </el-upload>
+      </div>
 
       <template #footer>
         <el-space wrap>
-          <el-button @click="uploadDialogVisible = false">取消</el-button>
-          <el-button type="primary" :disabled="!uploadList.length" @click="submitUploads">
-            确认上传
+          <el-button :disabled="uploadSubmitting" @click="uploadDialogVisible = false">取消</el-button>
+          <el-button
+            type="primary"
+            :loading="uploadSubmitting"
+            :disabled="!uploadList.length"
+            @click="submitUploads"
+          >
+            {{ uploadSubmitting ? '正在上传并解析...' : '确认上传' }}
           </el-button>
         </el-space>
       </template>
@@ -141,6 +172,7 @@ const record = ref<AssetDeviceMasterRecordVO>(resolveAssetDeviceMasterRecord(nul
 const uploadDialogVisible = ref(false)
 const uploadList = ref<UploadUserFile[]>([])
 const pendingUploadFiles = ref<UploadFile[]>([])
+const uploadSubmitting = ref(false)
 const currentOperatorName = computed(() => userStore.getUser.nickname || '当前账号')
 
 const getDeviceId = () => Number(route.params.id)
@@ -169,6 +201,14 @@ const goBack = () => {
 
 const handleUpload = () => {
   uploadDialogVisible.value = true
+}
+
+const handleUploadDialogClose = (done: () => void) => {
+  if (uploadSubmitting.value) {
+    message.info('附件正在上传和解析，请稍候再关闭窗口')
+    return
+  }
+  done()
 }
 
 const handleReparse = async () => {
@@ -212,17 +252,23 @@ const submitUploads = async () => {
     message.warning('当前附件缺少可上传的原始文件，请重新选择后再试')
     return
   }
-  record.value = await uploadAssetDeviceDocument(device.value, {
-    code: device.value.code,
-    fileName: rawFiles[0]?.name || uploadList.value[0].name,
-    files: rawFiles,
-    uploadedBy: currentOperatorName.value
-  })
-  const uploadedCount = rawFiles.length
-  uploadDialogVisible.value = false
-  uploadList.value = []
-  pendingUploadFiles.value = []
-  message.success(`已补录 ${uploadedCount} 份建档附件`)
+  uploadSubmitting.value = true
+  try {
+    await uploadAssetDeviceDocument(device.value, {
+      code: device.value.code,
+      fileName: rawFiles[0]?.name || uploadList.value[0].name,
+      files: rawFiles,
+      uploadedBy: currentOperatorName.value
+    })
+    await getDetail()
+    const uploadedCount = rawFiles.length
+    uploadDialogVisible.value = false
+    uploadList.value = []
+    pendingUploadFiles.value = []
+    message.success(`已补录 ${uploadedCount} 份建档附件，当前页面已自动刷新`)
+  } finally {
+    uploadSubmitting.value = false
+  }
 }
 
 watch(
@@ -257,5 +303,10 @@ onMounted(async () => {
 
 :deep(.el-upload-dragger) {
   width: 100%;
+}
+
+.upload-selection-tip {
+  margin-top: 8px;
+  color: var(--el-color-primary);
 }
 </style>

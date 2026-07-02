@@ -137,6 +137,7 @@ import { onActivated } from 'vue'
 import { ContentWrap } from '@/components/ContentWrap'
 import { DvMachineryApi, DvMachineryVO } from '@/api/mes/dv/machinery'
 import {
+  hydrateAssetDeviceDocumentParseFromRemote,
   refreshAssetDeviceRuleRecord,
   resolveAssetDeviceMasterRecord,
   type AssetDeviceCurrentStatus,
@@ -255,6 +256,7 @@ const getDetail = async () => {
     const data = (await DvMachineryApi.getMachinery(id)) as MachineryDetail | null
     device.value = data
     record.value = resolveAssetDeviceMasterRecord(data)
+    record.value = await hydrateAssetDeviceDocumentParseFromRemote(data)
     record.value = await refreshAssetDeviceRuleRecord(data)
     hasLoaded.value = true
   } finally {
