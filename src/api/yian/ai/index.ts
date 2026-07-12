@@ -119,6 +119,11 @@ export const YianAiApi = {
     code: string
     operator: string
     fileNames: string[]
+    files?: Array<{
+      fileName: string
+      mimeType?: string
+      url?: string
+    }>
   }) => {
     return await request.post<YianAssetDeviceDocumentParseRespVO>({
       url: '/yian/ai/asset/device/reparse-documents',

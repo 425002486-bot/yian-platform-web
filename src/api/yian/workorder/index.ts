@@ -29,14 +29,41 @@ export type WorkorderPriority = 'P1' | 'P2' | 'P3'
 export type WorkorderRiskLevel = 'high' | 'medium' | 'low'
 export type WorkorderReleaseResult = 'pending' | 'approved' | 'limited' | 'rejected'
 
+export interface WorkorderMaterialAllocationItem {
+  materialStockId: number
+  itemId: number
+  quantity: number
+  batchId?: number
+  batchCode?: string
+  warehouseId: number
+  locationId: number
+  areaId: number
+}
+
 export interface WorkorderMaterialItem {
+  itemId?: number
   name: string
   spec: string
   quantity: number
   requestedQuantity?: number
   pickedQuantity?: number
   currentInventory?: number
+  returnedQuantity?: number
+  allocations?: WorkorderMaterialAllocationItem[]
   status: 'picked' | 'pending'
+}
+
+export interface WorkorderMaterialReturnItem {
+  issueId?: number
+  issueCode?: string
+  itemId?: number
+  itemName: string
+  itemSpec?: string
+  returnQuantity: number
+  returnReason: string
+  operator: string
+  returnedAt: string
+  allocations?: WorkorderMaterialAllocationItem[]
 }
 
 export interface WorkorderTimelineItem {
@@ -82,6 +109,7 @@ export interface WorkorderStageRecordPicking {
   picker: string
   warehouse: string
   items: WorkorderMaterialItem[]
+  returns?: WorkorderMaterialReturnItem[]
   pickedAt: string
 }
 
@@ -264,6 +292,7 @@ const BOARD_STAGES: WorkorderStage[] = [
 
 const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value))
 const now = () => dayjs().format('YYYY-MM-DD HH:mm')
+const DIAGNOSIS_PART_CODE_PATTERN = /^[A-Z0-9]+(?:-[A-Z0-9]+){2,}$/i
 
 const localizeDiagnosisCategory = (value?: string) => {
   switch ((value || '').trim()) {
@@ -288,17 +317,36 @@ const localizeDiagnosisSentence = (value?: string) => {
   }
 }
 
+const localizeDiagnosisPart = (part?: string) => {
+  const normalized = (part || '').trim()
+  if (!normalized) {
+    return ''
+  }
+  const upper = normalized.toUpperCase()
+  if (upper.includes('PROP-SET') || upper.includes('PROPELLER')) {
+    return '桨叶套装'
+  }
+  if (
+    DIAGNOSIS_PART_CODE_PATTERN.test(upper) &&
+    (upper.startsWith('UAV-') ||
+      upper.startsWith('BAT-') ||
+      upper.startsWith('YA-') ||
+      upper.startsWith('DRONE-'))
+  ) {
+    return ''
+  }
+  switch (normalized) {
+    case 'Flight-control diagnostic toolkit':
+      return '飞控诊断工具'
+    case 'Attitude sensor assembly':
+      return '姿态传感器组件'
+    default:
+      return normalized
+  }
+}
+
 const localizeDiagnosisParts = (parts?: string[]) =>
-  (parts || []).map((part) => {
-    switch ((part || '').trim()) {
-      case 'Flight-control diagnostic toolkit':
-        return '飞控诊断工具'
-      case 'Attitude sensor assembly':
-        return '姿态传感器组件'
-      default:
-        return part
-    }
-  })
+  Array.from(new Set((parts || []).map((part) => localizeDiagnosisPart(part)).filter(Boolean)))
 
 const localizeTimelineText = (value?: string) => {
   const normalized = (value || '').trim()
@@ -331,6 +379,57 @@ const normalizeTimelineItem = (item: WorkorderTimelineItem): WorkorderTimelineIt
   operator: item.operator || '系统'
 })
 
+const normalizeMaterialAllocations = (
+  allocations?: WorkorderMaterialAllocationItem[]
+): WorkorderMaterialAllocationItem[] =>
+  Array.isArray(allocations)
+    ? allocations
+        .filter((item) => item && typeof item.materialStockId === 'number' && typeof item.itemId === 'number')
+        .map((item) => ({
+          materialStockId: item.materialStockId,
+          itemId: item.itemId,
+          quantity: Number(item.quantity || 0),
+          batchId: item.batchId,
+          batchCode: item.batchCode,
+          warehouseId: item.warehouseId,
+          locationId: item.locationId,
+          areaId: item.areaId
+        }))
+        .filter((item) => item.quantity > 0)
+    : []
+
+const normalizePickingItems = (items?: WorkorderMaterialItem[]): WorkorderMaterialItem[] =>
+  Array.isArray(items)
+    ? items.map((item) => ({
+        ...item,
+        itemId: item.itemId,
+        quantity: Number(item.quantity || item.pickedQuantity || 0),
+        requestedQuantity: Number(item.requestedQuantity || item.quantity || item.pickedQuantity || 0),
+        pickedQuantity: Number(item.pickedQuantity || item.quantity || 0),
+        currentInventory: Number(item.currentInventory || 0),
+        returnedQuantity: Number(item.returnedQuantity || 0),
+        allocations: normalizeMaterialAllocations(item.allocations),
+        status: item.status || 'picked'
+      }))
+    : []
+
+const normalizeReturnItems = (items?: WorkorderMaterialReturnItem[]): WorkorderMaterialReturnItem[] =>
+  Array.isArray(items)
+    ? items.map((item) => ({
+        ...item,
+        issueId: item.issueId,
+        issueCode: item.issueCode,
+        itemId: item.itemId,
+        itemName: item.itemName,
+        itemSpec: item.itemSpec,
+        returnQuantity: Number(item.returnQuantity || 0),
+        returnReason: item.returnReason || '',
+        operator: item.operator || '系统',
+        returnedAt: item.returnedAt || now(),
+        allocations: normalizeMaterialAllocations(item.allocations)
+      }))
+    : []
+
 const normalizeDiagnosisRecord = (diagnosis?: WorkorderStageRecordDiagnosis) => {
   if (!diagnosis) {
     return diagnosis
@@ -348,6 +447,13 @@ const normalizeDiagnosisRecord = (diagnosis?: WorkorderStageRecordDiagnosis) => 
 const normalizeWorkorderEntity = (order: WorkorderEntity): WorkorderEntity => ({
   ...order,
   diagnosis: normalizeDiagnosisRecord(order.diagnosis),
+  picking: order.picking
+    ? {
+        ...order.picking,
+        items: normalizePickingItems(order.picking.items),
+        returns: normalizeReturnItems(order.picking.returns)
+      }
+    : order.picking,
   timeline: (order.timeline || []).map(normalizeTimelineItem)
 })
 
@@ -514,7 +620,26 @@ const seedOrders = (): WorkorderEntity[] => [
     picking: {
       picker: '赵工',
       warehouse: '华东备件库',
-      items: [{ name: '桨叶套装', spec: 'M350 RTK', quantity: 1, status: 'picked' }],
+      items: [
+        {
+          itemId: 1,
+          name: '桨叶套装',
+          spec: 'M350 RTK',
+          quantity: 1,
+          returnedQuantity: 0,
+          allocations: [
+            {
+              materialStockId: 1,
+              itemId: 1,
+              quantity: 1,
+              warehouseId: 1,
+              locationId: 1,
+              areaId: 1
+            }
+          ],
+          status: 'picked'
+        }
+      ],
       pickedAt: '2026-05-10 10:40'
     },
     repair: {
@@ -846,7 +971,12 @@ export const YianWorkorderApi = {
     return mutateOrder(id, (draft) => {
       draft.status = 'repairing'
       draft.slaDeadline = resolveStageSlaDeadline('repairing')
-      draft.picking = { ...payload, pickedAt: now() }
+      draft.picking = {
+        ...payload,
+        items: normalizePickingItems(payload.items),
+        returns: draft.picking?.returns || [],
+        pickedAt: now()
+      }
       draft.timeline.push(
         createTimeline(
           'repairing',
@@ -854,6 +984,68 @@ export const YianWorkorderApi = {
           `从${payload.warehouse}领出${payload.items.length}项备件`,
           payload.picker
         )
+      )
+    })
+  },
+
+  submitReturnMaterial(
+    id: number,
+    payload: {
+      operator: string
+      reason: string
+      issueId?: number
+      issueCode?: string
+      returnedAt?: string
+      items: Array<{
+        itemId?: number
+        itemName: string
+        itemSpec?: string
+        returnQuantity: number
+        allocations?: WorkorderMaterialAllocationItem[]
+      }>
+    }
+  ) {
+    return mutateOrder(id, (draft) => {
+      if (!draft.picking) {
+        return
+      }
+      const returnedAt = payload.returnedAt || now()
+      const returns = normalizeReturnItems(draft.picking.returns || [])
+      payload.items.forEach((item) => {
+        returns.push({
+          issueId: payload.issueId,
+          issueCode: payload.issueCode,
+          itemId: item.itemId,
+          itemName: item.itemName,
+          itemSpec: item.itemSpec,
+          returnQuantity: Number(item.returnQuantity || 0),
+          returnReason: payload.reason,
+          operator: payload.operator,
+          returnedAt,
+          allocations: normalizeMaterialAllocations(item.allocations)
+        })
+      })
+      draft.picking.returns = returns
+      draft.picking.items = normalizePickingItems(draft.picking.items).map((pickedItem) => {
+        const returnedQuantity = returns
+          .filter(
+            (returnItem) =>
+              (returnItem.itemId && pickedItem.itemId && returnItem.itemId === pickedItem.itemId) ||
+              (!returnItem.itemId &&
+                returnItem.itemName === pickedItem.name &&
+                (returnItem.itemSpec || '') === (pickedItem.spec || ''))
+          )
+          .reduce((sum, returnItem) => sum + Number(returnItem.returnQuantity || 0), 0)
+        return {
+          ...pickedItem,
+          returnedQuantity
+        }
+      })
+      const summary = payload.items
+        .map((item) => `${item.itemName} x${Number(item.returnQuantity || 0)}`)
+        .join('、')
+      draft.timeline.push(
+        createTimeline('repairing', '退料登记', `退回${summary}，原因：${payload.reason}`, payload.operator, returnedAt)
       )
     })
   },

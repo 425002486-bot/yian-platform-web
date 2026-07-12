@@ -161,6 +161,14 @@
                 <p class="action-panel__desc">{{ currentAction.description }}</p>
                 <el-space wrap>
                   <el-button
+                    v-if="showReturnMaterialEntry"
+                    plain
+                    :disabled="returnMaterialSubmitting"
+                    @click="openReturnMaterialDialog"
+                  >
+                    退料登记
+                  </el-button>
+                  <el-button
                     v-if="currentAction.primaryText"
                     type="primary"
                     @click="handlePrimaryAction"
@@ -295,6 +303,110 @@
               @click="submitLogImport"
             >
               {{ logImportSubmitting ? '正在导入...' : '确认导入' }}
+            </el-button>
+          </el-space>
+        </template>
+      </el-dialog>
+
+      <el-dialog
+        v-model="returnMaterialDialogVisible"
+        title="退料登记"
+        width="760px"
+        :close-on-click-modal="!returnMaterialSubmitting"
+        :close-on-press-escape="!returnMaterialSubmitting"
+        :show-close="!returnMaterialSubmitting"
+      >
+        <div
+          v-loading="returnMaterialSubmitting"
+          element-loading-text="正在提交退料并回写工单，请稍候..."
+        >
+          <el-alert
+            type="info"
+            :closable="false"
+            show-icon
+            class="mb-16px"
+            title="仅支持对本工单已领未退的备件进行退料"
+            description="提交成功后会自动更新工单时间轴、本地领料记录和实际库存回库结果。"
+          />
+          <el-form label-width="88px">
+            <el-form-item label="退料人">
+              <el-input v-model="returnMaterialForm.operator" disabled />
+            </el-form-item>
+            <el-form-item label="退料原因">
+              <el-input
+                v-model="returnMaterialForm.reason"
+                type="textarea"
+                :rows="3"
+                maxlength="200"
+                show-word-limit
+                placeholder="请填写退料原因，例如：型号不匹配、任务取消、现场未使用等"
+              />
+            </el-form-item>
+          </el-form>
+
+          <div v-if="returnMaterialForm.items.length" class="pick-items">
+            <div
+              v-for="(item, index) in returnMaterialForm.items"
+              :key="`return-item-${index}`"
+              class="pick-item-card"
+            >
+              <div class="pick-item-card__head">
+                <span>退料项 {{ index + 1 }}</span>
+                <el-tag size="small" effect="plain" type="warning">
+                  可退 {{ item.maxReturnable }}
+                </el-tag>
+              </div>
+              <el-row :gutter="12">
+                <el-col :span="12">
+                  <el-form-item label="备件名称" label-width="84px">
+                    <el-input :model-value="item.name" disabled />
+                  </el-form-item>
+                </el-col>
+                <el-col :span="12">
+                  <el-form-item label="规格" label-width="60px">
+                    <el-input :model-value="item.spec || '-'" disabled />
+                  </el-form-item>
+                </el-col>
+                <el-col :span="8">
+                  <el-form-item label="已领数量" label-width="84px">
+                    <el-input :model-value="String(item.pickedQuantity)" disabled />
+                  </el-form-item>
+                </el-col>
+                <el-col :span="8">
+                  <el-form-item label="已退数量" label-width="84px">
+                    <el-input :model-value="String(item.returnedQuantity)" disabled />
+                  </el-form-item>
+                </el-col>
+                <el-col :span="8">
+                  <el-form-item label="本次退料" label-width="84px">
+                    <el-input-number
+                      v-model="item.returnQuantity"
+                      :min="0"
+                      :max="item.maxReturnable"
+                      class="!w-100%"
+                    />
+                  </el-form-item>
+                </el-col>
+              </el-row>
+            </div>
+          </div>
+          <el-empty v-else description="当前没有可退料的备件" />
+        </div>
+        <template #footer>
+          <el-space wrap>
+            <el-button
+              :disabled="returnMaterialSubmitting"
+              @click="returnMaterialDialogVisible = false"
+            >
+              取消
+            </el-button>
+            <el-button
+              type="primary"
+              :loading="returnMaterialSubmitting"
+              :disabled="!returnMaterialForm.items.length"
+              @click="submitReturnMaterialDialogV2"
+            >
+              {{ returnMaterialSubmitting ? '正在提交退料...' : '提交退料' }}
             </el-button>
           </el-space>
         </template>
@@ -933,7 +1045,14 @@ import { YianAiApi } from '@/api/yian/ai'
 import { useUserStoreWithOut } from '@/store/modules/user'
 import { WmMiscIssueApi } from '@/api/mes/wm/miscissue'
 import { WmMiscIssueLineApi } from '@/api/mes/wm/miscissue/line'
-import { getItemSimpleList, getMaterialStockPage, type MaterialStockVO } from '@/api/yian/inventory'
+import {
+  getItemSimpleList,
+  getMaterialStockPage,
+  submitWorkorderReturnMaterial,
+  type MaterialStockVO,
+  type WorkorderMaterialReturnAllocationReqVO,
+  type WorkorderMaterialReturnItemReqVO
+} from '@/api/yian/inventory'
 import { listLinkedBatteries, type AssetBatteryVO } from '@/api/yian/asset'
 import {
   evaluateReleaseRule,
@@ -989,7 +1108,19 @@ interface PickingDraftItem {
   requestedQuantity: number
   pickedQuantity: number
   currentInventory: number
+  allocations?: WorkorderMaterialItem['allocations']
   manual: boolean
+}
+
+interface ReturnMaterialDraftItem {
+  itemId?: number
+  name: string
+  spec: string
+  pickedQuantity: number
+  returnedQuantity: number
+  maxReturnable: number
+  returnQuantity: number
+  allocations: WorkorderMaterialItem['allocations']
 }
 
 interface InventoryItemOption {
@@ -1060,6 +1191,8 @@ const currentOperatorName = computed(() => userStore.getUser.nickname || '当前
 const inventoryReferenceDialogVisible = ref(false)
 const inventoryReferenceLoading = ref(false)
 const inventoryReferenceRows = ref<MaterialStockVO[]>([])
+const returnMaterialDialogVisible = ref(false)
+const returnMaterialSubmitting = ref(false)
 const itemOptions = ref<InventoryItemOption[]>([])
 const itemOptionsLoading = ref(false)
 const personnelLoading = ref(false)
@@ -1098,6 +1231,12 @@ const repairForm = reactive({
   solution: '',
   result: '',
   usedHours: 2
+})
+
+const returnMaterialForm = reactive({
+  operator: '',
+  reason: '',
+  items: [] as ReturnMaterialDraftItem[]
 })
 
 const inspectForm = reactive({
@@ -1690,6 +1829,141 @@ const parsePickItems = (): WorkorderMaterialItem[] =>
       status: item.currentInventory >= item.pickedQuantity ? 'picked' : 'pending'
     }))
 
+const getItemPickedQuantity = (item: WorkorderMaterialItem) =>
+  Number(item.pickedQuantity ?? item.quantity ?? 0)
+
+const getItemReturnedQuantity = (item: WorkorderMaterialItem) => Number(item.returnedQuantity ?? 0)
+
+const getItemReturnableQuantity = (item: WorkorderMaterialItem) =>
+  Math.max(0, getItemPickedQuantity(item) - getItemReturnedQuantity(item))
+
+const buildFallbackAllocationsFromInventory = (
+  name: string,
+  spec: string,
+  quantity: number,
+  preferredItemId?: number
+) => {
+  const normalizedName = name.trim()
+  const normalizedSpec = spec.trim()
+  const matchedRows = inventoryReferenceRows.value.filter((row) => {
+    if (preferredItemId && row.itemId === preferredItemId) {
+      return true
+    }
+    if (row.itemName !== normalizedName) {
+      return false
+    }
+    if (!normalizedSpec) {
+      return true
+    }
+    return !row.specification || row.specification === normalizedSpec
+  })
+  let remaining = quantity
+  const allocations: WorkorderMaterialReturnAllocationReqVO[] = []
+  matchedRows.forEach((row) => {
+    if (remaining <= 0) {
+      return
+    }
+    const available = Number(row.quantity || 0)
+    if (available <= 0) {
+      return
+    }
+    const allocatedQuantity = Math.min(remaining, available)
+    allocations.push({
+      materialStockId: row.id,
+      itemId: row.itemId,
+      quantity: allocatedQuantity,
+      batchId: row.batchId,
+      batchCode: row.batchCode,
+      warehouseId: row.warehouseId,
+      locationId: row.locationId,
+      areaId: row.areaId
+    })
+    remaining -= allocatedQuantity
+  })
+  return {
+    itemId: preferredItemId || matchedRows[0]?.itemId,
+    allocations
+  }
+}
+
+const showReturnMaterialEntry = computed(
+  () =>
+    order.value?.status === 'repairing' &&
+    Boolean(order.value?.picking?.items?.some((item) => getItemReturnableQuantity(item) > 0))
+)
+
+const syncReturnMaterialFormFromOrder = () => {
+  returnMaterialForm.operator = currentOperatorName.value
+  returnMaterialForm.reason = ''
+  returnMaterialForm.items = (order.value?.picking?.items || [])
+    .map((item) => {
+      const maxReturnable = getItemReturnableQuantity(item)
+      const fallback = buildFallbackAllocationsFromInventory(
+        item.name,
+        item.spec || '',
+        maxReturnable,
+        item.itemId
+      )
+      return {
+        itemId: item.itemId || fallback.itemId,
+        name: item.name,
+        spec: item.spec || '',
+        pickedQuantity: getItemPickedQuantity(item),
+        returnedQuantity: getItemReturnedQuantity(item),
+        maxReturnable,
+        returnQuantity: maxReturnable > 0 ? 1 : 0,
+        allocations: item.allocations?.length ? item.allocations : fallback.allocations
+      }
+    })
+    .filter((item) => item.maxReturnable > 0)
+}
+
+const openReturnMaterialDialog = async () => {
+  if (!order.value) {
+    return
+  }
+  await loadInventoryReference()
+  syncReturnMaterialFormFromOrder()
+  if (!returnMaterialForm.items.length) {
+    message.warning('当前工单没有可退料的备件')
+    return
+  }
+  returnMaterialDialogVisible.value = true
+}
+
+const buildReturnMaterialAllocations = (
+  item: ReturnMaterialDraftItem
+): WorkorderMaterialReturnAllocationReqVO[] => {
+  let remaining = Number(item.returnQuantity || 0)
+  const result: WorkorderMaterialReturnAllocationReqVO[] = []
+  ;(item.allocations || []).forEach((allocation) => {
+    if (remaining <= 0 || !allocation || Number(allocation.quantity || 0) <= 0) {
+      return
+    }
+    const quantity = Math.min(remaining, Number(allocation.quantity || 0))
+    if (quantity <= 0) {
+      return
+    }
+    result.push({
+      materialStockId: allocation.materialStockId,
+      itemId: allocation.itemId,
+      quantity,
+      batchId: allocation.batchId,
+      batchCode: allocation.batchCode,
+      warehouseId: allocation.warehouseId,
+      locationId: allocation.locationId,
+      areaId: allocation.areaId
+    })
+    remaining -= quantity
+  })
+  return result
+}
+
+const shouldFallbackToLocalReturn = (error: any) => {
+  const errorMessage = String(error?.message || error?.msg || '').trim()
+  return errorMessage.includes('未找到匹配的工单') || errorMessage.includes('未找到对应工单')
+}
+
 const DIAGNOSIS_ASSISTANT_CONTEXT_MARK = '[DIAGNOSIS_ASSISTANT_CONTEXT]'
 
 const getDiagnosisAssistantStorageKey = () =>
@@ -2201,11 +2475,23 @@ const refreshItemInventory = async (item: PickingDraftItem) => {
       (sum: number, row: MaterialStockVO) => sum + Number(row.quantity || 0),
       0
     )
-    item.currentInventory = totalQuantity
-    item.pickedQuantity = Math.min(item.pickedQuantity, totalQuantity)
-  } catch {
-    item.currentInventory = 0
-  }
+  item.currentInventory = totalQuantity
+  item.pickedQuantity = Math.min(item.pickedQuantity, totalQuantity)
+  item.allocations = matchedRows
+    .filter((row) => Number(row.quantity || 0) > 0)
+    .map((row) => ({
+      materialStockId: row.id,
+      itemId: row.itemId,
+      quantity: Number(row.quantity || 0),
+      batchId: row.batchId,
+      batchCode: row.batchCode,
+      warehouseId: row.warehouseId,
+      locationId: row.locationId,
+      areaId: row.areaId
+    }))
+} catch {
+  item.currentInventory = 0
+}
 }
 
 const handleManualItemChange = async (index: number) => {
@@ -2237,7 +2523,19 @@ const syncPickItemsInventory = () => {
     return {
       ...item,
       currentInventory: matched.quantity,
-      pickedQuantity: cappedQuantity
+      pickedQuantity: cappedQuantity,
+      allocations: [
+        {
+          materialStockId: matched.id,
+          itemId: matched.itemId,
+          quantity: Number(matched.quantity || 0),
+          batchId: matched.batchId,
+          batchCode: matched.batchCode,
+          warehouseId: matched.warehouseId,
+          locationId: matched.locationId,
+          areaId: matched.areaId
+        }
+      ]
     }
   })
   inventoryReferenceDialogVisible.value = false
@@ -2472,12 +2770,13 @@ const syncFormsFromOrder = () => {
     pickForm.picker = picking.picker
     pickForm.warehouse = picking.warehouse
     pickForm.items = picking.items.map((item, index) => ({
-      itemId: undefined,
+      itemId: item.itemId,
       name: item.name,
       spec: item.spec,
       requestedQuantity: item.requestedQuantity || item.quantity,
       pickedQuantity: item.pickedQuantity || item.quantity,
       currentInventory: item.currentInventory ?? item.quantity + index + 2,
+      allocations: item.allocations || [],
       manual: false
     }))
   } else if (diagnoseForm.suggestedPartsText) {
@@ -2585,6 +2884,7 @@ const openProcessingDrawer = async () => {
   if (!order.value || !activeProcessingStage.value) return
   resetStageForms()
   syncFormsFromOrder()
+  syncReturnMaterialFormFromOrder()
   if (order.value.status === 'picking') {
     await hydratePickItemsInventory()
     await loadInventoryReference()
@@ -2602,6 +2902,163 @@ const openRequestedProcessingDrawer = async () => {
 
 const handlePrimaryAction = () => {
   openProcessingDrawer()
+}
+
+const submitReturnMaterialDialog = async () => {
+  if (!order.value) {
+    return
+  }
+  const operator = returnMaterialForm.operator.trim() || currentOperatorName.value
+  const reason = returnMaterialForm.reason.trim()
+  if (!reason) {
+    message.warning('请先填写退料原因')
+    return
+  }
+  const items = returnMaterialForm.items
+    .filter((item) => Number(item.returnQuantity || 0) > 0)
+    .map((item) => {
+      const allocations = buildReturnMaterialAllocations(item)
+      return {
+        itemId: Number(item.itemId),
+        itemName: item.name.trim(),
+        itemSpec: item.spec.trim() || undefined,
+        pickedQuantity: item.pickedQuantity,
+        returnQuantity: Number(item.returnQuantity || 0),
+        allocations
+      }
+    })
+  if (!items.length) {
+    message.warning('请至少填写一项本次退料数量')
+    return
+  }
+  if (items.some((item) => !item.itemId)) {
+    message.warning('存在缺少备件主数据的领料项，暂时无法提交退料')
+    return
+  }
+  if (items.some((item) => item.allocations.length === 0)) {
+    message.warning('存在缺少库存分配来源的领料项，暂时无法提交退料')
+    return
+  }
+  const allocationMismatch = items.find((item) => {
+    const allocated = item.allocations.reduce((sum, allocation) => sum + Number(allocation.quantity || 0), 0)
+    return allocated !== Number(item.returnQuantity || 0)
+  })
+  if (allocationMismatch) {
+    message.warning(`备件【${allocationMismatch.itemName}】的退料分配数量与本次退料数量不一致`)
+    return
+  }
+
+  returnMaterialSubmitting.value = true
+  try {
+    const resp = await submitWorkorderReturnMaterial({
+      workorderId: order.value.id,
+      orderNo: order.value.orderNo,
+      operator,
+      reason,
+      items: items as WorkorderMaterialReturnItemReqVO[]
+    })
+    YianWorkorderApi.submitReturnMaterial(order.value.id, {
+      operator,
+      reason,
+      issueId: resp.issueId,
+      issueCode: resp.issueCode,
+      returnedAt: resp.returnedAt,
+      items
+    })
+    returnMaterialDialogVisible.value = false
+    message.success('已完成退料登记')
+    await loadOrder()
+  } catch (error: any) {
+    message.error(error?.message || '退料提交失败，请稍后重试')
+  } finally {
+    returnMaterialSubmitting.value = false
+  }
+}
+
+const submitReturnMaterialDialogV2 = async () => {
+  if (!order.value) {
+    return
+  }
+  const operator = returnMaterialForm.operator.trim() || currentOperatorName.value
+  const reason = returnMaterialForm.reason.trim()
+  if (!reason) {
+    message.warning('请先填写退料原因')
+    return
+  }
+  const items = returnMaterialForm.items
+    .filter((item) => Number(item.returnQuantity || 0) > 0)
+    .map((item) => {
+      const allocations = buildReturnMaterialAllocations(item)
+      return {
+        itemId: Number(item.itemId),
+        itemName: item.name.trim(),
+        itemSpec: item.spec.trim() || undefined,
+        pickedQuantity: item.pickedQuantity,
+        returnQuantity: Number(item.returnQuantity || 0),
+        allocations
+      }
+    })
+  if (!items.length) {
+    message.warning('请至少填写一项本次退料数量')
+    return
+  }
+  if (items.some((item) => !item.itemId)) {
+    message.warning('存在缺少备件主数据的领料项，暂时无法提交退料')
+    return
+  }
+  if (items.some((item) => item.allocations.length === 0)) {
+    message.warning('存在缺少库存分配来源的领料项，暂时无法提交退料')
+    return
+  }
+  const allocationMismatch = items.find((item) => {
+    const allocated = item.allocations.reduce(
+      (sum, allocation) => sum + Number(allocation.quantity || 0),
+      0
+    )
+    return allocated !== Number(item.returnQuantity || 0)
+  })
+  if (allocationMismatch) {
+    message.warning(`备件【${allocationMismatch.itemName}】的退料分配数量与本次退料数量不一致`)
+    return
+  }
+
+  returnMaterialSubmitting.value = true
+  try {
+    const resp = await submitWorkorderReturnMaterial({
+      workorderId: order.value.id,
+      orderNo: order.value.orderNo,
+      operator,
+      reason,
+      items: items as WorkorderMaterialReturnItemReqVO[]
+    })
+    YianWorkorderApi.submitReturnMaterial(order.value.id, {
+      operator,
+      reason,
+      issueId: resp.issueId,
+      issueCode: resp.issueCode,
+      returnedAt: resp.returnedAt,
+      items
+    })
+    returnMaterialDialogVisible.value = false
+    message.success('已完成退料登记')
+    await loadOrder()
+  } catch (error: any) {
+    if (shouldFallbackToLocalReturn(error)) {
+      YianWorkorderApi.submitReturnMaterial(order.value.id, {
+        operator,
+        reason,
+        returnedAt: new Date().toISOString(),
+        items
+      })
+      returnMaterialDialogVisible.value = false
+      message.success('已完成退料登记（当前工单未同步到后端库，已按本地工单闭环处理）')
+      await loadOrder()
+      return
+    }
+    message.error(error?.message || '退料提交失败，请稍后重试')
+  } finally {
+    returnMaterialSubmitting.value = false
+  }
 }
 
 const handleViewEvidence = () => {
@@ -2881,6 +3338,32 @@ const submitPicking = async () => {
     message.warning('当前库存分配不足，无法完成领料')
     return
   }
+  const allocationMap = new Map(
+    allocations.map((entry) => [
+      `${entry.item.name.trim()}__${entry.item.spec.trim()}`,
+      entry.allocations.map((detail) => ({
+        materialStockId: detail.row.id,
+        itemId: detail.row.itemId,
+        quantity: detail.quantity,
+        batchId: detail.row.batchId,
+        batchCode: detail.row.batchCode,
+        warehouseId: detail.row.warehouseId,
+        locationId: detail.row.locationId,
+        areaId: detail.row.areaId
+      }))
+    ])
+  )
+  const itemIdMap = new Map(
+    pickForm.items.map((item) => [`${item.name.trim()}__${item.spec.trim()}`, item.itemId])
+  )
+  const enrichedItems = items.map((item) => {
+    const key = `${item.name.trim()}__${item.spec.trim()}`
+    return {
+      ...item,
+      itemId: itemIdMap.get(key),
+      allocations: allocationMap.get(key) || []
+    }
+  })
   const pickingAllowed = await validateWorkorderStageRule({
     stage: 'picking',
     pickerProvided: Boolean(pickForm.picker.trim()),
@@ -2898,7 +3381,7 @@ const submitPicking = async () => {
   YianWorkorderApi.submitPicking(order.value.id, {
     picker: pickForm.picker,
     warehouse: pickForm.warehouse.trim(),
-    items
+    items: enrichedItems
   })
   processingDrawerVisible.value = false
   message.success('已完成领料并进入维修')
@@ -3053,6 +3536,7 @@ watch(
     evidenceDialogVisible.value = false
     imageImportDialogVisible.value = false
     logImportDialogVisible.value = false
+    returnMaterialDialogVisible.value = false
     diagnosisAssistantVisible.value = false
     inventoryReferenceDialogVisible.value = false
     imageUploadList.value = []

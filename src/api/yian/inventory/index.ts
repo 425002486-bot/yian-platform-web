@@ -1,4 +1,7 @@
+import axios from 'axios'
 import request from '@/config/axios'
+import { config } from '@/config/axios/config'
+import { getAccessToken, getTenantId, getVisitTenantId } from '@/utils/auth'
 
 export interface MaterialStockVO {
   id: number
@@ -90,6 +93,47 @@ export interface PickReturnRecordVO {
   createTime: string
 }
 
+export interface WorkorderMaterialReturnAllocationReqVO {
+  materialStockId: number
+  itemId: number
+  quantity: number
+  batchId?: number
+  batchCode?: string
+  warehouseId: number
+  locationId: number
+  areaId: number
+}
+
+export interface WorkorderMaterialReturnItemReqVO {
+  itemId: number
+  itemName: string
+  itemSpec?: string
+  pickedQuantity?: number
+  returnQuantity: number
+  allocations: WorkorderMaterialReturnAllocationReqVO[]
+}
+
+export interface WorkorderMaterialReturnReqVO {
+  workorderId: number
+  orderNo: string
+  operator: string
+  reason: string
+  items: WorkorderMaterialReturnItemReqVO[]
+}
+
+export interface WorkorderMaterialReturnRespVO {
+  issueId: number
+  issueCode: string
+  returnedAt: string
+  items: Array<{
+    itemId: number
+    itemName: string
+    itemSpec?: string
+    returnQuantity: number
+    returnReason: string
+  }>
+}
+
 // 下载备件导入模板
 export const downloadImportTemplate = () => {
   return request.download({ url: '/mes/wm/material-stock/import-template' })
@@ -105,4 +149,35 @@ export const importSparePartExcel = (file: File, updateSupport?: boolean) => {
 
 export const getPickReturnRecords = (params?: { issueCode?: string; actionType?: string }) => {
   return request.get({ url: '/mes/wm/material-stock/pick-return-records', params })
+}
+
+export const submitWorkorderReturnMaterial = (data: WorkorderMaterialReturnReqVO) => {
+  const headers: Record<string, string | number> = {
+    'Content-Type': 'application/json'
+  }
+  const accessToken = getAccessToken()
+  if (accessToken) {
+    headers.Authorization = `Bearer ${accessToken}`
+  }
+  const tenantId = getTenantId()
+  if (tenantId) {
+    headers['tenant-id'] = tenantId
+  }
+  const visitTenantId = getVisitTenantId()
+  if (visitTenantId) {
+    headers['visit-tenant-id'] = visitTenantId
+  }
+  return axios
+    .post(`${config.base_url}/mes/yian/workorder/return-material`, data, {
+      headers,
+      timeout: config.request_timeout
+    })
+    .then((response) => {
+      const payload = response.data
+      const code = payload?.code
+      if (code === 0 || code === 200) {
+        return payload?.data as WorkorderMaterialReturnRespVO
+      }
+      throw new Error(payload?.msg || '退料提交失败，请稍后重试')
+    })
 }

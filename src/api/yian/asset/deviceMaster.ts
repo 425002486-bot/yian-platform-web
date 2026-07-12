@@ -693,6 +693,26 @@ const buildDocumentParseResult = (documentType: string) => {
   return '已登记建档附件，待补充解析结论'
 }
 
+const inferMimeTypeFromName = (fileName: string) => {
+  const lower = fileName.toLowerCase()
+  if (lower.endsWith('.png')) return 'image/png'
+  if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) return 'image/jpeg'
+  if (lower.endsWith('.webp')) return 'image/webp'
+  if (lower.endsWith('.bmp')) return 'image/bmp'
+  if (lower.endsWith('.pdf')) return 'application/pdf'
+  if (lower.endsWith('.doc')) return 'application/msword'
+  if (lower.endsWith('.docx'))
+    return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+  if (lower.endsWith('.xls')) return 'application/vnd.ms-excel'
+  if (lower.endsWith('.xlsx'))
+    return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+  if (lower.endsWith('.csv')) return 'text/csv'
+  if (lower.endsWith('.txt') || lower.endsWith('.log')) return 'text/plain'
+  if (lower.endsWith('.json')) return 'application/json'
+  if (lower.endsWith('.zip')) return 'application/zip'
+  return 'application/octet-stream'
+}
+
 const buildDocumentSummary = (documents: AssetDocumentVO[]) => {
   if (!documents.length) {
     return {
@@ -1244,7 +1264,12 @@ export const reparseAssetDeviceDocuments = async (
         machineryId: Number(device.id),
         code,
         operator,
-        fileNames: current.documents.map((item) => item.fileName)
+        fileNames: current.documents.map((item) => item.fileName),
+        files: current.documents.map((item) => ({
+          fileName: item.fileName,
+          url: item.url,
+          mimeType: inferMimeTypeFromName(item.fileName)
+        }))
       })
       return syncAssetDeviceDocumentParseResult(
         { ...device, code },

@@ -119,7 +119,7 @@
           <Icon icon="ep:upload-filled" class="mb-12px text-28px" />
           <div class="el-upload__text">将建档附件拖到此处，或 <em>点击选择文件</em></div>
           <template #tip>
-            <div class="el-upload__tip">支持图片、PDF、Word、Excel、日志压缩包等建档附件</div>
+            <div class="el-upload__tip">支持图片、PDF、Word、Excel、日志压缩包等建档附件，其中图片类合格证支持 OCR 识别</div>
             <div v-if="uploadList.length" class="upload-selection-tip">
               已选择 {{ uploadList.length }} 份附件，可一次性上传并处理多份文件
             </div>
