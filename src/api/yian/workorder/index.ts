@@ -66,6 +66,19 @@ export interface WorkorderMaterialReturnItem {
   allocations?: WorkorderMaterialAllocationItem[]
 }
 
+export interface LocalWorkorderReturnRecord {
+  id: number
+  issueCode: string
+  workOrderCode: string
+  itemName: string
+  itemCode: string
+  actionType: '退料'
+  quantity: number
+  operatorName: string
+  resultStatus: string
+  createTime: string
+}
+
 export interface WorkorderTimelineItem {
   stage: WorkorderStage
   title: string
@@ -857,6 +870,29 @@ export const YianWorkorderApi = {
       .map(toVO)
       .filter((item) => item.status === 'releasing' || item.release)
       .filter((item) => !status || item.releaseStatus === status)
+  },
+
+  // Local-only workorders cannot create a backend stock record, so expose their
+  // return entries to the unified record page with an explicit local status.
+  getLocalReturnRecords(): LocalWorkorderReturnRecord[] {
+    return ensureOrders()
+      .flatMap((order) =>
+        (order.picking?.returns || [])
+          .filter((item) => !item.issueCode)
+          .map((item, index) => ({
+            id: -(order.id * 100000 + index + 1),
+            issueCode: `LOCAL-RET-${order.orderNo}-${index + 1}`,
+            workOrderCode: order.orderNo,
+            itemName: item.itemName,
+            itemCode: item.itemId ? `ITEM-${item.itemId}` : '-',
+            actionType: '退料' as const,
+            quantity: Number(item.returnQuantity || 0),
+            operatorName: item.operator || '系统',
+            resultStatus: '本地工单已登记',
+            createTime: item.returnedAt
+          }))
+      )
+      .sort((left, right) => dayjs(right.createTime).valueOf() - dayjs(left.createTime).valueOf())
   },
 
   create(data: WorkorderCreateReqVO) {

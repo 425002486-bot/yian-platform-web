@@ -48,12 +48,18 @@
 <script lang="ts" setup>
 import { ContentWrap } from '@/components/ContentWrap'
 import { getPickReturnRecords, type PickReturnRecordVO } from '@/api/yian/inventory'
+import {
+  YianWorkorderApi,
+  type LocalWorkorderReturnRecord
+} from '@/api/yian/workorder'
 import { formatDate } from '@/utils/formatTime'
 
 defineOptions({ name: 'InventoryPick' })
 
 const loading = ref(false)
-const records = ref<PickReturnRecordVO[]>([])
+type PickReturnRecordItem = PickReturnRecordVO | LocalWorkorderReturnRecord
+
+const records = ref<PickReturnRecordItem[]>([])
 
 const queryParams = reactive({
   issueCode: undefined as string | undefined,
@@ -63,7 +69,19 @@ const queryParams = reactive({
 const getList = async () => {
   loading.value = true
   try {
-    records.value = await getPickReturnRecords(queryParams)
+    const remoteRecords = await getPickReturnRecords(queryParams)
+    const localReturnRecords = YianWorkorderApi.getLocalReturnRecords().filter((record) => {
+      if (queryParams.actionType && queryParams.actionType !== 'return') {
+        return false
+      }
+      if (!queryParams.issueCode) {
+        return true
+      }
+      return record.issueCode.includes(queryParams.issueCode)
+    })
+    records.value = [...remoteRecords, ...localReturnRecords].sort(
+      (left, right) => new Date(right.createTime).getTime() - new Date(left.createTime).getTime()
+    )
   } finally {
     loading.value = false
   }

@@ -1443,7 +1443,28 @@ const groundedTag = computed(() => {
   return { label: '已停飞', type: 'danger' as const }
 })
 
-const usedPartsSummary = computed(() => formatMaterialItems(order.value?.picking?.items))
+const formatNetMaterialItems = (items?: WorkorderMaterialItem[]) => {
+  const actualUsedItems = (items || [])
+    .map((item) => ({
+      ...item,
+      actualQuantity: Math.max(
+        0,
+        Number(item.pickedQuantity ?? item.quantity ?? 0) - Number(item.returnedQuantity ?? 0)
+      )
+    }))
+    .filter((item) => item.actualQuantity > 0)
+
+  return actualUsedItems.length
+    ? actualUsedItems
+        .map((item) => {
+          const spec = item.spec ? `（${item.spec}）` : ''
+          return `${item.name} x${item.actualQuantity}${spec}`
+        })
+        .join('、')
+    : '无实际使用备件'
+}
+
+const usedPartsSummary = computed(() => formatNetMaterialItems(order.value?.picking?.items))
 
 const processingDrawerMeta = computed<DrawerMeta>(() => {
   const metaMap: Record<ActiveProcessingStage, DrawerMeta> = {
