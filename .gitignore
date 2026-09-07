@@ -7,3 +7,9 @@ pnpm-debug
 auto-*.d.ts
 .idea
 .history
+
+# Local credentials and generated acceptance results
+.env.local
+.env.*.local
+test-results/
+playwright-report/

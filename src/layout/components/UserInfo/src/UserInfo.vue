@@ -50,7 +50,7 @@ const toProfile = async () => {
   push('/user/profile')
 }
 const toDocument = () => {
-  window.open('https://doc.iocoder.cn/')
+  window.open('https://github.com/425002486-bot/yian-platform-web#readme', '_blank', 'noopener,noreferrer')
 }
 </script>
 

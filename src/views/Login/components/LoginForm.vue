@@ -129,20 +129,12 @@
           </div>
         </el-form-item>
       </el-col>
-      <el-divider content-position="center">萌新必读</el-divider>
+      <el-divider content-position="center">翼安智链</el-divider>
       <el-col :span="24" class="px-10px">
-        <el-form-item>
-          <div class="w-full flex justify-between">
-            <el-link href="https://doc.iocoder.cn/" target="_blank">📚开发指南</el-link>
-            <el-link href="https://doc.iocoder.cn/video/" target="_blank">🔥视频教程</el-link>
-            <el-link href="https://www.iocoder.cn/Interview/good-collection/" target="_blank">
-              ⚡面试手册
-            </el-link>
-            <el-link href="http://static.yudao.iocoder.cn/mp/Aix9975.jpeg" target="_blank">
-              🤝外包咨询
-            </el-link>
-          </div>
-        </el-form-item>
+        <div class="w-full flex justify-center gap-6">
+          <el-link href="https://github.com/425002486-bot/yian-platform-web#readme" target="_blank" rel="noopener noreferrer">项目介绍</el-link>
+          <el-link href="https://github.com/425002486-bot/yian-platform-web/issues" target="_blank" rel="noopener noreferrer">问题反馈</el-link>
+        </div>
       </el-col>
     </el-row>
   </el-form>

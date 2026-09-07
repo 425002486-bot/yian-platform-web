@@ -205,9 +205,9 @@ service.interceptors.response.use(
           t('sys.api.errMsg901') +
           '</div>' +
           '<div> &nbsp; </div>' +
-          '<div>参考 https://doc.iocoder.cn/ 教程</div>' +
+          '<div>请检查后端服务及本地 API 地址配置</div>' +
           '<div> &nbsp; </div>' +
-          '<div>5 分钟搭建本地环境</div>'
+          '<div>环境配置说明见项目 README</div>'
       })
       return Promise.reject(new Error(msg))
     } else if (code !== 0 && code !== 200) {
